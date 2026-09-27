@@ -13,18 +13,36 @@ export interface Restaurant {
   category: string;
   description: string;
   address: string;
+  neighborhood?: string;
+  wilaya?: string;
   distance: string;
   openingHours: string;
   accentColor: string;
   themeGradient: string;
   imageEmoji: string;
-  stampsCount: number; // 0 to 6
+  imageUrl: string;
+  googleMapsUrl: string;
+  phone?: string;
+  stampsCount: number; // Strictly 0 to 6
   maxStamps: 6;
   rewardTitle: string;
   rewardDescription: string;
   qrSecretCode: string;
   totalRewardsClaimed: number;
   perks: string[];
+  // Multilingual translations
+  nameAr?: string;
+  nameFr?: string;
+  nameEn?: string;
+  categoryAr?: string;
+  categoryFr?: string;
+  categoryEn?: string;
+  rewardTitleAr?: string;
+  rewardTitleFr?: string;
+  rewardTitleEn?: string;
+  descriptionAr?: string;
+  descriptionFr?: string;
+  descriptionEn?: string;
 }
 
 export interface UserProfile {

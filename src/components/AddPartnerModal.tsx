@@ -30,23 +30,28 @@ export const AddPartnerModal: React.FC<AddPartnerModalProps> = ({
 
     const slug = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
     const newRest: Restaurant = {
-      id: `rest_${slug}_${Date.now().toString().slice(-4)}`,
+      id: `rest_bba_${slug}_${Date.now().toString().slice(-4)}`,
       name: name.trim(),
+      nameAr: name.trim(),
       category: category.trim(),
-      description: `Partner establishment offering digital loyalty rewards with Pointili.`,
-      address: address.trim() || 'Downtown City Center',
-      distance: '0.4 mi away',
-      openingHours: '8:00 AM - 10:00 PM',
+      description: `مطعم شريك معتمد في برنامج بطاقات ولاء Pointili بولاية برج بوعريريج.`,
+      address: address.trim() || 'وسط المدينة، برج بوعريريج',
+      neighborhood: 'وسط المدينة، برج بوعريريج',
+      wilaya: '34 - برج بوعريريج',
+      distance: '0.4 كم من موقعك',
+      openingHours: '08:00 صباحاً - 11:00 مساءً',
       accentColor: '#76FF03',
       themeGradient: 'from-zinc-900 to-zinc-950',
       imageEmoji: imageEmoji,
+      imageUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800&q=80',
+      googleMapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name.trim() + ' Bordj Bou Arreridj Algeria')}`,
       stampsCount: 0,
       maxStamps: 6,
       rewardTitle: rewardTitle.trim(),
       rewardDescription: rewardDescription.trim(),
-      qrSecretCode: `POINTILI_QR_${slug.toUpperCase()}_2026`,
+      qrSecretCode: `POINTILI_BBA_${slug.toUpperCase()}_2026`,
       totalRewardsClaimed: 0,
-      perks: ['10% off member perk', 'Instant stamp with QR', 'Priority checkout'],
+      perks: ['ختم فوري عبر كود QR', 'عروض حصرية للأعضاء', 'خدمة سريعة'],
     };
 
     onAddRestaurant(newRest);

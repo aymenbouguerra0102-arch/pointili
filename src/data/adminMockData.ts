@@ -35,134 +35,31 @@ export const INITIAL_DAILY_ACTIVITY: DailyActivityPoint[] = [
   { day: 'Sun', dayAr: 'الأحد (اليوم)', scans: 614, activeUsers: 412, rewardsUnlocked: 37 },
 ];
 
-export const INITIAL_WINNERS_LOG: WinnerLogItem[] = [
-  {
-    id: 'win_1',
-    userName: 'Alex Rivera',
-    userAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
-    restaurantName: 'Burger & Craft Lab',
-    restaurantEmoji: '🍔',
-    rewardTitle: 'Free Meal/Drink (Deluxe Smash Burger + Truffle Fries)',
-    timestamp: '12 mins ago',
-    code: 'PTL-LAB-2026',
-    status: 'unlocked',
-  },
-  {
-    id: 'win_2',
-    userName: 'Sophia Chen',
-    userAvatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=200&q=80',
-    restaurantName: 'Neon Bean Specialty Coffee',
-    restaurantEmoji: '☕',
-    rewardTitle: 'Free Signature Beverage (Iced Oat Latte)',
-    timestamp: '45 mins ago',
-    code: 'PTL-BEAN-9812',
-    status: 'claimed',
-  },
-  {
-    id: 'win_3',
-    userName: 'Marcus Vance',
-    userAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
-    restaurantName: 'Crust & Fire Pizzeria',
-    restaurantEmoji: '🍕',
-    rewardTitle: 'Free 12" Personal Pizza or Calzone',
-    timestamp: '2 hours ago',
-    code: 'PTL-FIRE-4401',
-    status: 'claimed',
-  },
-  {
-    id: 'win_4',
-    userName: 'Nadia Larbi',
-    userAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80',
-    restaurantName: 'Umami Ramen House',
-    restaurantEmoji: '🍜',
-    rewardTitle: 'Free Signature Ramen Bowl & Gyoza Combo',
-    timestamp: '3 hours ago',
-    code: 'PTL-RAMEN-7723',
-    status: 'claimed',
-  },
-  {
-    id: 'win_5',
-    userName: 'Karim Ziani',
-    userAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80',
-    restaurantName: 'Matcha Bloom Tea Bar',
-    restaurantEmoji: '🍵',
-    rewardTitle: 'Free Large Signature Matcha Boba',
-    timestamp: '5 hours ago',
-    code: 'PTL-MATCHA-1120',
-    status: 'claimed',
-  },
-  {
-    id: 'win_6',
-    userName: 'Yasmine Mansour',
-    userAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80',
-    restaurantName: 'Sourdough & Butter',
-    restaurantEmoji: '🥐',
-    rewardTitle: 'Free Artisan Loaf & Pastry Box',
-    timestamp: 'Yesterday',
-    code: 'PTL-BAKE-5542',
-    status: 'claimed',
-  },
-];
+export const INITIAL_WINNERS_LOG: WinnerLogItem[] = [];
 
-export const INITIAL_REGISTERED_USERS: UserProfile[] = [
-  {
-    id: 'usr_001',
-    name: 'Alex Rivera',
-    email: 'alex.rivera@gmail.com',
-    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
-    memberSince: 'March 2026',
-    tier: 'Gold Loyalty',
-    stampsCount: 21,
-    rewardsWon: 3,
-  },
-  {
-    id: 'usr_002',
-    name: 'Sophia Chen',
-    email: 'sophia.chen@gmail.com',
-    avatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=200&q=80',
-    memberSince: 'January 2026',
-    tier: 'Platinum Club',
-    stampsCount: 34,
-    rewardsWon: 5,
-  },
-  {
-    id: 'usr_003',
-    name: 'Marcus Vance',
-    email: 'marcus.vance@gmail.com',
-    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
-    memberSince: 'February 2026',
-    tier: 'VIP Foodie',
-    stampsCount: 18,
-    rewardsWon: 2,
-  },
-  {
-    id: 'usr_004',
-    name: 'Nadia Larbi',
-    email: 'nadia.larbi@outlook.com',
-    avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80',
-    memberSince: 'March 2026',
-    tier: 'Silver Member',
-    stampsCount: 12,
-    rewardsWon: 1,
-  },
-  {
-    id: 'usr_005',
-    name: 'Karim Ziani',
-    email: 'karim.z@gmail.com',
-    avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80',
-    memberSince: 'February 2026',
-    tier: 'Gold Loyalty',
-    stampsCount: 26,
-    rewardsWon: 4,
-  },
-  {
-    id: 'usr_006',
-    name: 'Yasmine Mansour',
-    email: 'yasmine.m@gmail.com',
-    avatarUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80',
-    memberSince: 'March 2026',
-    tier: 'Active Foodie',
-    stampsCount: 9,
-    rewardsWon: 1,
-  },
-];
+export const STORAGE_KEY_REGISTERED_USERS = 'pointili_registered_users_v2';
+
+export function getRegisteredUsers(): UserProfile[] {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY_REGISTERED_USERS);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {}
+  return [];
+}
+
+export function saveRegisteredUser(user: UserProfile): UserProfile[] {
+  try {
+    const existing = getRegisteredUsers();
+    const filtered = existing.filter((u) => u.email.toLowerCase() !== user.email.toLowerCase());
+    const updated = [user, ...filtered];
+    localStorage.setItem(STORAGE_KEY_REGISTERED_USERS, JSON.stringify(updated));
+    return updated;
+  } catch {
+    return [user];
+  }
+}
+
+export const INITIAL_REGISTERED_USERS: UserProfile[] = [];

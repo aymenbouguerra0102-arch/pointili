@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Restaurant, UserProfile, StampHistoryItem } from './types';
 import {
-  INITIAL_USER,
   INITIAL_RESTAURANTS,
   DISCOVERABLE_RESTAURANTS,
   INITIAL_HISTORY,
 } from './data/mockData';
+import { saveRegisteredUser } from './data/adminMockData';
 import { AuthScreen } from './components/AuthScreen';
 import { CardsDashboard } from './components/CardsDashboard';
 import { QRScannerTab } from './components/QRScannerTab';
@@ -21,9 +21,27 @@ import { PWAInstallBanner } from './components/PWAInstallBanner';
 import confetti from 'canvas-confetti';
 
 const STORAGE_KEY_AUTH = 'pointili_auth_user_v1';
-const STORAGE_KEY_RESTAURANTS = 'pointili_restaurants_v1';
-const STORAGE_KEY_HISTORY = 'pointili_history_v1';
+const STORAGE_KEY_BBA_RESTAURANTS = 'pointili_bba_restaurants_v5';
+const STORAGE_KEY_HISTORY = 'pointili_history_v2';
 const STORAGE_KEY_ADMIN = 'pointili_admin_logged_in_v1';
+
+// Helper to store/load user-specific stamps so new users start strictly with 0 stamps
+function getUserStampsMap(userId: string): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(`pointili_stamps_user_${userId}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (typeof parsed === 'object' && parsed !== null) return parsed;
+    }
+  } catch {}
+  return {};
+}
+
+function saveUserStampsMap(userId: string, map: Record<string, number>) {
+  try {
+    localStorage.setItem(`pointili_stamps_user_${userId}`, JSON.stringify(map));
+  } catch {}
+}
 
 export default function App() {
   // Admin State (Secured in ephemeral sessionStorage)
@@ -36,24 +54,47 @@ export default function App() {
   });
   const [showAdminLogin, setShowAdminLogin] = useState<boolean>(false);
 
-  // Customer Auth State
+  // Customer Auth State - Strictly locked until genuine Gmail login
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_AUTH);
-      return saved ? JSON.parse(saved) : null;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (
+          parsed &&
+          parsed.email &&
+          !parsed.email.includes('alex.rivera') &&
+          parsed.id !== 'usr_pointili_882'
+        ) {
+          return parsed;
+        }
+      }
+      localStorage.removeItem(STORAGE_KEY_AUTH);
+      return null;
     } catch {
       return null;
     }
   });
 
-  // Active Loyalty Cards State
+  // Active Loyalty Cards State (Always BBA Venues, initialized with user's specific stamps or 0)
   const [restaurants, setRestaurants] = useState<Restaurant[]>(() => {
+    const baseRestaurants = INITIAL_RESTAURANTS;
+    // If user is already stored, load their specific stamps
     try {
-      const saved = localStorage.getItem(STORAGE_KEY_RESTAURANTS);
-      return saved ? JSON.parse(saved) : INITIAL_RESTAURANTS;
-    } catch {
-      return INITIAL_RESTAURANTS;
-    }
+      const savedUser = localStorage.getItem(STORAGE_KEY_AUTH);
+      if (savedUser) {
+        const userObj = JSON.parse(savedUser);
+        if (userObj && userObj.id) {
+          const userStamps = getUserStampsMap(userObj.id);
+          return baseRestaurants.map((r) => ({
+            ...r,
+            stampsCount: typeof userStamps[r.id] === 'number' ? userStamps[r.id] : 0,
+          }));
+        }
+      }
+    } catch {}
+    // Default: strictly 0 stamps for all cards!
+    return baseRestaurants.map((r) => ({ ...r, stampsCount: 0 }));
   });
 
   // Stamp History State
@@ -78,14 +119,18 @@ export default function App() {
   useEffect(() => {
     if (currentUser) {
       localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(currentUser));
+      // Load user-specific stamps for this authenticated account
+      const userStamps = getUserStampsMap(currentUser.id);
+      setRestaurants((prev) =>
+        prev.map((r) => ({
+          ...r,
+          stampsCount: typeof userStamps[r.id] === 'number' ? userStamps[r.id] : 0,
+        }))
+      );
     } else {
       localStorage.removeItem(STORAGE_KEY_AUTH);
     }
   }, [currentUser]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_RESTAURANTS, JSON.stringify(restaurants));
-  }, [restaurants]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(history));
@@ -103,6 +148,15 @@ export default function App() {
   // Auth Handlers
   const handleLogin = (user: UserProfile) => {
     setCurrentUser(user);
+    saveRegisteredUser(user);
+    // Reset or load stamps for this specific user
+    const userStamps = getUserStampsMap(user.id);
+    setRestaurants(
+      INITIAL_RESTAURANTS.map((r) => ({
+        ...r,
+        stampsCount: typeof userStamps[r.id] === 'number' ? userStamps[r.id] : 0,
+      }))
+    );
     setCurrentTab('cards');
   };
 
@@ -110,6 +164,8 @@ export default function App() {
     setCurrentUser(null);
     setCardForDetail(null);
     setCardForRedemption(null);
+    // Reset cards in memory to 0
+    setRestaurants(INITIAL_RESTAURANTS.map((r) => ({ ...r, stampsCount: 0 })));
   };
 
   // Admin Handlers
@@ -124,7 +180,7 @@ export default function App() {
 
   // Add Partner Restaurant (from Admin Panel)
   const handleAddRestaurant = (newRestaurant: Restaurant) => {
-    setRestaurants((prev) => [newRestaurant, ...prev]);
+    setRestaurants((prev) => [{ ...newRestaurant, stampsCount: 0 }, ...prev]);
     confetti({
       particleCount: 50,
       spread: 70,
@@ -134,6 +190,7 @@ export default function App() {
   };
 
   // Add Stamp Action (Scan simulation or live QR scan)
+  // ONLY ADDS STAMP UPON QR SCAN!
   const handleAddStamp = (restaurantId: string) => {
     const target = restaurants.find((r) => r.id === restaurantId);
     if (!target) {
@@ -141,7 +198,6 @@ export default function App() {
     }
 
     if (target.stampsCount >= 6) {
-      // Already unlocked!
       return {
         success: true,
         restaurant: target,
@@ -165,16 +221,23 @@ export default function App() {
 
     setRestaurants(updated);
 
+    // Save stamps strictly to this user's account map
+    if (currentUser) {
+      const currentMap = getUserStampsMap(currentUser.id);
+      currentMap[restaurantId] = nextCount;
+      saveUserStampsMap(currentUser.id, currentMap);
+    }
+
     // Update history
     const newHistoryItem: StampHistoryItem = {
       id: `hist_${Date.now()}`,
       type: isUnlockedNow ? 'reward_unlocked' : 'stamp_added',
-      timestamp: 'Just now',
+      timestamp: 'الآن (Just now)',
       restaurantId: target.id,
-      restaurantName: target.name,
+      restaurantName: target.nameAr || target.name,
       details: isUnlockedNow
-        ? '6 of 6 stamps completed! Free Reward Unlocked 🎉'
-        : `Stamp #${nextCount} collected via QR scan`,
+        ? 'اكتملت 6/6 أختام! مبروك فتح المكافأة المجانية 🎉'
+        : `تم ختم الدائرة #${nextCount} عبر مسح كود QR`,
     };
 
     setHistory((prev) => [newHistoryItem, ...prev]);
@@ -184,16 +247,15 @@ export default function App() {
       setCardForDetail({ ...cardForDetail, stampsCount: nextCount });
     }
 
-    const updatedTarget = updated.find((r) => r.id === restaurantId);
     return {
       success: true,
-      restaurant: updatedTarget,
+      restaurant: { ...target, stampsCount: nextCount },
       newCount: nextCount,
       rewardUnlocked: isUnlockedNow,
     };
   };
 
-  // Reward Redemption Handler
+  // Redeem Reward Action (After 6 stamps, reset card for repeated use)
   const handleConfirmRedemption = (restaurantId: string) => {
     const target = restaurants.find((r) => r.id === restaurantId);
     if (!target) return;
@@ -202,7 +264,7 @@ export default function App() {
       if (r.id === restaurantId) {
         return {
           ...r,
-          stampsCount: 0, // Reset to 0 for next loyalty cycle
+          stampsCount: 0, // Reset to 0 after claim!
           totalRewardsClaimed: (r.totalRewardsClaimed || 0) + 1,
         };
       }
@@ -211,59 +273,47 @@ export default function App() {
 
     setRestaurants(updated);
 
-    const newHistoryItem: StampHistoryItem = {
+    // Update user's stamp map in storage
+    if (currentUser) {
+      const currentMap = getUserStampsMap(currentUser.id);
+      currentMap[restaurantId] = 0;
+      saveUserStampsMap(currentUser.id, currentMap);
+    }
+
+    // Add Redemption to history
+    const redemptionHistory: StampHistoryItem = {
       id: `hist_${Date.now()}`,
       type: 'reward_redeemed',
-      timestamp: 'Just now',
+      timestamp: 'الآن (Just now)',
       restaurantId: target.id,
-      restaurantName: target.name,
-      details: `Redeemed ${target.rewardTitle}`,
+      restaurantName: target.nameAr || target.name,
+      details: `تم استلام ${target.rewardTitleAr || target.rewardTitle} بنجاح لدى الكاشير.`,
     };
 
-    setHistory((prev) => [newHistoryItem, ...prev]);
+    setHistory((prev) => [redemptionHistory, ...prev]);
+    setCardForRedemption(null);
   };
 
-  // Reset Mock Data
-  const handleResetDemoData = () => {
-    setRestaurants(INITIAL_RESTAURANTS);
-    setHistory(INITIAL_HISTORY);
-    localStorage.removeItem(STORAGE_KEY_RESTAURANTS);
-    localStorage.removeItem(STORAGE_KEY_HISTORY);
-  };
-
-  // Add New Discoverable Place
-  const handleAddPlace = (place: Restaurant) => {
-    if (restaurants.some((r) => r.id === place.id)) return;
-    setRestaurants((prev) => [place, ...prev]);
+  // Join new discoverable venue
+  const handleAddPlace = (newPlace: Restaurant) => {
+    setRestaurants((prev) => [...prev, { ...newPlace, stampsCount: 0 }]);
     setDiscoverModalOpen(false);
-
     confetti({
       particleCount: 40,
       spread: 60,
-      origin: { y: 0.7 },
-      colors: ['#76FF03', '#FFFFFF'],
     });
   };
 
-  // Quick navigation shortcut from card to scanner
-  const handleQuickScanFromCard = (restaurant: Restaurant) => {
-    setCurrentTab('scanner');
+  // Reset user data helper
+  const handleResetUserDemo = () => {
+    if (currentUser) {
+      localStorage.removeItem(`pointili_stamps_user_${currentUser.id}`);
+    }
+    setRestaurants(INITIAL_RESTAURANTS.map((r) => ({ ...r, stampsCount: 0 })));
+    setHistory([]);
   };
 
-  // Count ready rewards for bottom badge
-  const unlockedRewardsCount = restaurants.filter((r) => r.stampsCount >= 6).length;
-
-  // 1. IF ADMIN LOGIN MODAL IS OPEN
-  if (showAdminLogin) {
-    return (
-      <AdminLogin
-        onSuccess={handleAdminLoginSuccess}
-        onCancel={() => setShowAdminLogin(false)}
-      />
-    );
-  }
-
-  // 2. IF ADMIN IS LOGGED IN, RENDER DEDICATED ADMIN DASHBOARD
+  // 1. IF ADMIN LOGGED IN, RENDER ADMIN CONTROL PANEL
   if (isAdminLoggedIn) {
     return (
       <AdminDashboard
@@ -272,6 +322,16 @@ export default function App() {
         onBackToApp={() => setIsAdminLoggedIn(false)}
         onLogoutAdmin={handleAdminLogout}
         onSimulateScan={(id) => handleAddStamp(id)}
+      />
+    );
+  }
+
+  // 2. IF ADMIN LOGIN MODAL IS REQUESTED, SHOW ADMIN LOGIN
+  if (showAdminLogin) {
+    return (
+      <AdminLogin
+        onSuccess={handleAdminLoginSuccess}
+        onCancel={() => setShowAdminLogin(false)}
       />
     );
   }
@@ -286,10 +346,12 @@ export default function App() {
     );
   }
 
-  // 4. RENDER CUSTOMER MOBILE-FIRST APP
+  // Unlocked rewards count for bottom badge
+  const unlockedRewardsCount = restaurants.filter((r) => r.stampsCount >= 6).length;
+
+  // 4. MAIN CUSTOMER PORTAL
   return (
-    <div className="min-h-screen bg-black text-white flex justify-center selection:bg-[#76FF03] selection:text-black">
-      {/* Outer wrapper keeping mobile-first layout centered on desktop with ambient glow */}
+    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-between select-none">
       <div className="w-full max-w-md min-h-screen bg-zinc-950 flex flex-col relative shadow-2xl shadow-black border-x border-zinc-900/60">
         {/* Main View Router */}
         <main className="flex-1 w-full overflow-y-auto">
@@ -305,7 +367,10 @@ export default function App() {
               restaurants={restaurants}
               onSelectRestaurant={(r) => setCardForDetail(r)}
               onRedeemReward={(r) => setCardForRedemption(r)}
-              onQuickScan={handleQuickScanFromCard}
+              onQuickScan={(r) => {
+                setCardForDetail(null);
+                setCurrentTab('scanner');
+              }}
               onOpenDiscover={() => setDiscoverModalOpen(true)}
               onOpenMerchantQR={() => setMerchantQROpen(true)}
               onOpenAdminLogin={() => setShowAdminLogin(true)}
@@ -316,8 +381,9 @@ export default function App() {
           {currentTab === 'scanner' && (
             <QRScannerTab
               restaurants={restaurants}
-              onAddStamp={handleAddStamp}
+              onAddStamp={(id) => handleAddStamp(id)}
               onNavigateToCards={() => setCurrentTab('cards')}
+              preSelectedRestaurant={cardForDetail}
             />
           )}
 
@@ -327,7 +393,7 @@ export default function App() {
               restaurants={restaurants}
               history={history}
               onLogout={handleLogout}
-              onResetDemoData={handleResetDemoData}
+              onResetDemoData={handleResetUserDemo}
               onOpenMerchantQR={() => setMerchantQROpen(true)}
               onAddMorePlaces={() => setDiscoverModalOpen(true)}
               onOpenAdminLogin={() => setShowAdminLogin(true)}

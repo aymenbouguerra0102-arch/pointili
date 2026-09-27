@@ -1,5 +1,6 @@
 import React from 'react';
 import { CreditCard, QrCode, User, Sparkles } from 'lucide-react';
+import { useLanguage } from '../i18n/LanguageContext';
 
 export type NavTab = 'cards' | 'scanner' | 'profile';
 
@@ -14,17 +15,19 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   onChangeTab,
   unlockedRewardsCount,
 }) => {
+  const { t } = useLanguage();
+
   return (
     <nav
       aria-label="Bottom Navigation"
-      className="fixed bottom-0 left-0 right-0 z-40 bg-zinc-950/95 backdrop-blur-xl border-t border-zinc-800/80 px-4 py-2 transition-all"
+      className="fixed bottom-0 left-0 right-0 z-40 bg-zinc-950/95 backdrop-blur-xl border-t border-zinc-800/80 px-4 py-2 transition-all font-['Plus_Jakarta_Sans']"
     >
       <div className="max-w-md mx-auto grid grid-cols-3 items-center relative">
         {/* Tab 1: My Cards */}
         <button
           type="button"
           onClick={() => onChangeTab('cards')}
-          className={`min-h-[48px] flex flex-col items-center justify-center relative transition-colors ${
+          className={`min-h-[48px] flex flex-col items-center justify-center relative transition-colors cursor-pointer ${
             currentTab === 'cards'
               ? 'text-white'
               : 'text-zinc-500 hover:text-zinc-300'
@@ -47,7 +50,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               currentTab === 'cards' ? 'text-white font-semibold' : 'text-zinc-400'
             }`}
           >
-            My Cards
+            {t.tabCards}
           </span>
           {currentTab === 'cards' && (
             <span className="w-1 h-1 rounded-full bg-[#76FF03] mt-0.5" />
@@ -77,7 +80,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                 currentTab === 'scanner' ? 'text-black' : 'text-[#76FF03]'
               }`}
             >
-              SCAN
+              QR
             </span>
           </button>
         </div>
@@ -86,7 +89,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         <button
           type="button"
           onClick={() => onChangeTab('profile')}
-          className={`min-h-[48px] flex flex-col items-center justify-center relative transition-colors ${
+          className={`min-h-[48px] flex flex-col items-center justify-center relative transition-colors cursor-pointer ${
             currentTab === 'profile'
               ? 'text-white'
               : 'text-zinc-500 hover:text-zinc-300'
@@ -102,7 +105,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               currentTab === 'profile' ? 'text-white font-semibold' : 'text-zinc-400'
             }`}
           >
-            Profile
+            {t.tabProfile}
           </span>
           {currentTab === 'profile' && (
             <span className="w-1 h-1 rounded-full bg-[#76FF03] mt-0.5" />

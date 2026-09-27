@@ -22,9 +22,10 @@ import {
   Printer,
   Gift,
 } from 'lucide-react';
-import { INITIAL_DAILY_ACTIVITY, INITIAL_WINNERS_LOG, INITIAL_REGISTERED_USERS } from '../data/adminMockData';
+import { INITIAL_DAILY_ACTIVITY, INITIAL_WINNERS_LOG, getRegisteredUsers } from '../data/adminMockData';
 import { AddPartnerModal } from './AddPartnerModal';
 import { MerchantQRSheet } from './MerchantQRSheet';
+import { LanguageSelector } from '../i18n/LanguageContext';
 
 interface AdminDashboardProps {
   restaurants: Restaurant[];
@@ -48,11 +49,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [searchFilter, setSearchFilter] = useState('');
   const [dailyData] = useState<DailyActivityPoint[]>(INITIAL_DAILY_ACTIVITY);
   const [winnersList] = useState<WinnerLogItem[]>(INITIAL_WINNERS_LOG);
-  const [usersList] = useState<UserProfile[]>(INITIAL_REGISTERED_USERS);
+  const [usersList] = useState<UserProfile[]>(() => getRegisteredUsers());
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(6); // Default Sunday/Today
 
-  // Compute Total Metrics
-  const totalRegisteredUsers = 1428 + usersList.length;
+  // Compute Total Metrics from real registered accounts
+  const totalRegisteredUsers = usersList.length;
   const totalRewardsClaimed = 384 + restaurants.reduce((sum, r) => sum + (r.totalRewardsClaimed || 0), 0);
   const totalDailyScansToday = dailyData[selectedDayIndex]?.scans || 614;
   const dailyActiveUsersToday = dailyData[selectedDayIndex]?.activeUsers || 412;
@@ -86,6 +87,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         {/* Right Admin Profile & Actions */}
         <div className="flex items-center gap-2 sm:gap-4">
+          <LanguageSelector compact={false} />
+
           <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs">
             <ShieldCheck className="w-4 h-4 text-[#76FF03]" />
             <span className="font-bold text-white">Super Admin</span>
@@ -612,65 +615,77 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             {/* Table of Winners */}
             <div className="bg-zinc-900/90 rounded-3xl border border-zinc-800 overflow-hidden shadow-xl">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-zinc-950/80 text-zinc-400 border-b border-zinc-800 uppercase tracking-wider text-[10px]">
-                    <tr>
-                      <th className="py-3.5 px-5">Winner (المستخدم)</th>
-                      <th className="py-3.5 px-5">Restaurant (المحل)</th>
-                      <th className="py-3.5 px-5">Reward Earned (الجائزة)</th>
-                      <th className="py-3.5 px-5">Timestamp (التوقيت)</th>
-                      <th className="py-3.5 px-5">Voucher Code</th>
-                      <th className="py-3.5 px-5">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-800/60">
-                    {winnersList.map((item) => (
-                      <tr key={item.id} className="hover:bg-zinc-850/50 transition-colors">
-                        <td className="py-3.5 px-5">
-                          <div className="flex items-center gap-2.5">
-                            <img
-                              src={item.userAvatar}
-                              alt={item.userName}
-                              className="w-8 h-8 rounded-full object-cover ring-1 ring-zinc-700"
-                              referrerPolicy="no-referrer"
-                            />
-                            <span className="font-bold text-white">{item.userName}</span>
-                          </div>
-                        </td>
-                        <td className="py-3.5 px-5">
-                          <div className="flex items-center gap-1.5 font-medium text-zinc-300">
-                            <span>{item.restaurantEmoji}</span>
-                            <span>{item.restaurantName}</span>
-                          </div>
-                        </td>
-                        <td className="py-3.5 px-5">
-                          <span className="text-white font-semibold">
-                            {item.rewardTitle}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-5 text-zinc-400 font-mono text-[11px]">
-                          {item.timestamp}
-                        </td>
-                        <td className="py-3.5 px-5 font-mono text-[11px] text-[#76FF03]">
-                          {item.code}
-                        </td>
-                        <td className="py-3.5 px-5">
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                              item.status === 'claimed'
-                                ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/60'
-                                : 'bg-[#76FF03]/20 text-[#76FF03] border border-[#76FF03]'
-                            }`}
-                          >
-                            {item.status === 'claimed' ? 'Claimed at Counter' : 'Ready to Claim'}
-                          </span>
-                        </td>
+              {winnersList.length === 0 ? (
+                <div className="py-12 px-6 text-center">
+                  <div className="w-12 h-12 rounded-2xl bg-zinc-800 text-zinc-400 mx-auto flex items-center justify-center mb-3">
+                    <Trophy className="w-6 h-6 text-[#76FF03]" />
+                  </div>
+                  <div className="text-sm font-bold text-white">لا يوجد فائزون بعد</div>
+                  <div className="text-xs text-zinc-400 max-w-sm mx-auto mt-1">
+                    سيظهر الفائزون تلقائياً هنا فور إكمال أي مستخدم 6/6 أختام في بطاقته واسترداد وجبته أو مشروبه المجاني.
+                  </div>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-zinc-950/80 text-zinc-400 border-b border-zinc-800 uppercase tracking-wider text-[10px]">
+                      <tr>
+                        <th className="py-3.5 px-5">Winner (المستخدم)</th>
+                        <th className="py-3.5 px-5">Restaurant (المحل)</th>
+                        <th className="py-3.5 px-5">Reward Earned (الجائزة)</th>
+                        <th className="py-3.5 px-5">Timestamp (التوقيت)</th>
+                        <th className="py-3.5 px-5">Voucher Code</th>
+                        <th className="py-3.5 px-5">Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800/60">
+                      {winnersList.map((item) => (
+                        <tr key={item.id} className="hover:bg-zinc-850/50 transition-colors">
+                          <td className="py-3.5 px-5">
+                            <div className="flex items-center gap-2.5">
+                              <img
+                                src={item.userAvatar}
+                                alt={item.userName}
+                                className="w-8 h-8 rounded-full object-cover ring-1 ring-zinc-700"
+                                referrerPolicy="no-referrer"
+                              />
+                              <span className="font-bold text-white">{item.userName}</span>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-5">
+                            <div className="flex items-center gap-1.5 font-medium text-zinc-300">
+                              <span>{item.restaurantEmoji}</span>
+                              <span>{item.restaurantName}</span>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-5">
+                            <span className="text-white font-semibold">
+                              {item.rewardTitle}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-5 text-zinc-400 font-mono text-[11px]">
+                            {item.timestamp}
+                          </td>
+                          <td className="py-3.5 px-5 font-mono text-[11px] text-[#76FF03]">
+                            {item.code}
+                          </td>
+                          <td className="py-3.5 px-5">
+                            <span
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                item.status === 'claimed'
+                                  ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/60'
+                                  : 'bg-[#76FF03]/20 text-[#76FF03] border border-[#76FF03]'
+                              }`}
+                            >
+                              {item.status === 'claimed' ? 'Claimed at Counter' : 'Ready to Claim'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -703,60 +718,72 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
 
             <div className="bg-zinc-900/90 rounded-3xl border border-zinc-800 overflow-hidden shadow-xl">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-zinc-950/80 text-zinc-400 border-b border-zinc-800 uppercase tracking-wider text-[10px]">
-                    <tr>
-                      <th className="py-3.5 px-5">User</th>
-                      <th className="py-3.5 px-5">Email Address</th>
-                      <th className="py-3.5 px-5">Loyalty Tier</th>
-                      <th className="py-3.5 px-5">Member Since</th>
-                      <th className="py-3.5 px-5">Total Stamps</th>
-                      <th className="py-3.5 px-5">Free Meals Won</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-800/60">
-                    {usersList
-                      .filter(
-                        (u) =>
-                          u.name.toLowerCase().includes(searchFilter.toLowerCase()) ||
-                          u.email.toLowerCase().includes(searchFilter.toLowerCase())
-                      )
-                      .map((u) => (
-                        <tr key={u.id} className="hover:bg-zinc-850/50 transition-colors">
-                          <td className="py-3.5 px-5">
-                            <div className="flex items-center gap-2.5">
-                              <img
-                                src={u.avatarUrl}
-                                alt={u.name}
-                                className="w-8 h-8 rounded-full object-cover ring-1 ring-zinc-700"
-                                referrerPolicy="no-referrer"
-                              />
-                              <span className="font-bold text-white">{u.name}</span>
-                            </div>
-                          </td>
-                          <td className="py-3.5 px-5 text-zinc-400 font-mono text-[11px]">
-                            {u.email}
-                          </td>
-                          <td className="py-3.5 px-5">
-                            <span className="px-2 py-0.5 rounded bg-zinc-800 text-[10px] font-bold text-[#76FF03]">
-                              {u.tier}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-5 text-zinc-400">
-                            {u.memberSince}
-                          </td>
-                          <td className="py-3.5 px-5 font-mono text-[#76FF03] font-bold">
-                            {u.stampsCount || 18} stamps
-                          </td>
-                          <td className="py-3.5 px-5 font-mono text-white font-bold">
-                            {u.rewardsWon || 2} free rewards
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
+              {usersList.length === 0 ? (
+                <div className="py-12 px-6 text-center">
+                  <div className="w-12 h-12 rounded-2xl bg-zinc-800 text-zinc-400 mx-auto flex items-center justify-center mb-3">
+                    <Users className="w-6 h-6 text-[#76FF03]" />
+                  </div>
+                  <div className="text-sm font-bold text-white">لا يوجد مستخدمون مسجلون بعد</div>
+                  <div className="text-xs text-zinc-400 max-w-sm mx-auto mt-1">
+                    سيظهر هنا المستخدمون الحقيقيون فور تسجيل دخولهم بحسابات Gmail الخاصة بهم عبر شاشة الدخول الرئيسية.
+                  </div>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-zinc-950/80 text-zinc-400 border-b border-zinc-800 uppercase tracking-wider text-[10px]">
+                      <tr>
+                        <th className="py-3.5 px-5">User</th>
+                        <th className="py-3.5 px-5">Email Address</th>
+                        <th className="py-3.5 px-5">Loyalty Tier</th>
+                        <th className="py-3.5 px-5">Member Since</th>
+                        <th className="py-3.5 px-5">Total Stamps</th>
+                        <th className="py-3.5 px-5">Free Meals Won</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800/60">
+                      {usersList
+                        .filter(
+                          (u) =>
+                            u.name.toLowerCase().includes(searchFilter.toLowerCase()) ||
+                            u.email.toLowerCase().includes(searchFilter.toLowerCase())
+                        )
+                        .map((u) => (
+                          <tr key={u.id} className="hover:bg-zinc-850/50 transition-colors">
+                            <td className="py-3.5 px-5">
+                              <div className="flex items-center gap-2.5">
+                                <img
+                                  src={u.avatarUrl}
+                                  alt={u.name}
+                                  className="w-8 h-8 rounded-full object-cover ring-1 ring-zinc-700"
+                                  referrerPolicy="no-referrer"
+                                />
+                                <span className="font-bold text-white">{u.name}</span>
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-5 text-zinc-400 font-mono text-[11px]">
+                              {u.email}
+                            </td>
+                            <td className="py-3.5 px-5">
+                              <span className="px-2 py-0.5 rounded bg-zinc-800 text-[10px] font-bold text-[#76FF03]">
+                                {u.tier}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-5 text-zinc-400">
+                              {u.memberSince}
+                            </td>
+                            <td className="py-3.5 px-5 font-mono text-[#76FF03] font-bold">
+                              {u.stampsCount || 0} stamps
+                            </td>
+                            <td className="py-3.5 px-5 font-mono text-white font-bold">
+                              {u.rewardsWon || 0} free rewards
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         )}
