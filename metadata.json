@@ -1,0 +1,10 @@
+{
+  "name": "Pointili - Digital Loyalty Stamp Cards",
+  "description": "Modern digital loyalty stamp card app for cafes & restaurants using QR codes. Collect stamps, unlock free rewards, and track your loyalty progress.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

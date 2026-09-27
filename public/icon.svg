@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#76FF03"/>
+  
+  <!-- Upper Left Top Dot (Black) -->
+  <circle cx="158" cy="74" r="28" fill="#000000"/>
+  
+  <!-- Upper Left Side Dot (Black) -->
+  <circle cx="110" cy="142" r="26" fill="#000000"/>
+  
+  <!-- Calligraphic Black 'P' Body -->
+  <path d="M 168 135
+           C 205 105, 310 90, 395 130
+           C 445 158, 470 215, 435 285
+           C 385 365, 290 395, 220 388
+           C 185 385, 155 372, 138 355
+           L 132 372
+           C 140 405, 142 435, 135 452
+           C 125 470, 95 470, 105 435
+           C 115 390, 155 240, 185 142
+           C 178 138, 172 136, 168 135 Z"
+        fill="#000000"/>
+
+  <path d="M 170 140
+           C 240 100, 385 105, 432 170
+           C 475 230, 445 320, 365 370
+           C 285 410, 195 400, 140 365
+           L 115 455
+           C 105 480, 75 465, 90 430
+           L 182 142
+           Z"
+        fill="#000000"/>
+
+  <!-- Inner Loop Cutout to form the P hole -->
+  <path d="M 218 195
+           C 275 145, 370 160, 385 220
+           C 400 275, 345 340, 275 350
+           C 230 355, 188 335, 172 305
+           L 218 195 Z"
+        fill="#76FF03"/>
+
+  <!-- Main 'P' Calligraphy Stroke Overlay matching Image 2.png perfectly -->
+  <path d="M 166 142
+           C 210 105, 340 92, 420 148
+           C 478 192, 465 292, 385 360
+           C 310 420, 205 408, 142 368
+           L 115 448
+           C 105 475, 82 465, 92 435
+           L 185 140
+           Z"
+        fill="#000000"/>
+
+  <!-- Hole cutout in P -->
+  <path d="M 225 185
+           C 290 148, 385 165, 400 230
+           C 412 285, 360 345, 290 358
+           C 235 365, 192 338, 175 300
+           L 225 185 Z"
+        fill="#76FF03"/>
+
+  <!-- Glossy White/Lime Inner Slits and Highlights from Image 2.png -->
+  <!-- Upper stem slit -->
+  <path d="M 230 152 C 248 135, 260 135, 265 152 L 222 235 C 215 245, 205 240, 212 225 Z"
+        fill="#76FF03" opacity="0.95"/>
+  <path d="M 235 158 C 248 145, 255 145, 260 158 L 225 225 C 220 232, 212 230, 218 218 Z"
+        fill="#FFFFFF" opacity="0.9"/>
+
+  <!-- Upper right arch slit -->
+  <path d="M 388 152 C 412 178, 425 205, 415 228 C 402 215, 380 185, 362 168 Z"
+        fill="#76FF03" opacity="0.95"/>
+  <path d="M 392 158 C 412 182, 420 205, 412 222 C 402 212, 385 188, 368 172 Z"
+        fill="#FFFFFF" opacity="0.85"/>
+
+  <!-- Lower curve highlight slit -->
+  <path d="M 305 352 C 338 342, 365 318, 382 288 C 372 310, 345 332, 312 342 Z"
+        fill="#76FF03" opacity="0.95"/>
+  <path d="M 312 348 C 340 338, 362 318, 376 295 C 368 312, 345 330, 318 340 Z"
+        fill="#FFFFFF" opacity="0.8"/>
+</svg>
