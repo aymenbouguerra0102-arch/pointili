@@ -5,7 +5,11 @@ import {
   DISCOVERABLE_RESTAURANTS,
   INITIAL_HISTORY,
 } from './data/mockData';
-import { saveRegisteredUser } from './data/adminMockData';
+import {
+  saveRegisteredUser,
+  recordRealScanLog,
+  recordRealWinnerEvent,
+} from './data/adminMockData';
 import { AuthScreen } from './components/AuthScreen';
 import { CardsDashboard } from './components/CardsDashboard';
 import { QRScannerTab } from './components/QRScannerTab';
@@ -241,6 +245,29 @@ export default function App() {
     };
 
     setHistory((prev) => [newHistoryItem, ...prev]);
+
+    // Record real persistent scan event for Admin telemetry
+    recordRealScanLog({
+      restaurantId: target.id,
+      restaurantName: target.nameAr || target.name,
+      userId: currentUser?.id,
+      userName: currentUser?.name,
+    });
+
+    // If unlocked 6/6, record persistent winner item in Admin Winners Log
+    if (isUnlockedNow) {
+      recordRealWinnerEvent({
+        userName: currentUser?.name || 'مستخدم Pointili',
+        userAvatar:
+          currentUser?.avatarUrl ||
+          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
+        restaurantName: target.nameAr || target.name,
+        restaurantEmoji: target.imageEmoji || '🎁',
+        rewardTitle: target.rewardTitleAr || target.rewardTitle,
+        code: `BBA-WIN-${Math.floor(1000 + Math.random() * 9000)}`,
+        status: 'unlocked',
+      });
+    }
 
     // Keep active modal in sync if open
     if (cardForDetail && cardForDetail.id === restaurantId) {
