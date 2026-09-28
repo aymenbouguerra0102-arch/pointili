@@ -49,7 +49,6 @@ export interface Translations {
   scanInstructions: string;
   cameraActive: string;
   pointAtQR: string;
-  instantSimulate: string;
   orEnterCode: string;
   codePlaceholder: string;
   submitCode: string;
@@ -145,7 +144,6 @@ export const translations: Record<Language, Translations> = {
     scanInstructions: 'ثبّت الكاميرا على كود QR الخاص بالمطعم',
     cameraActive: 'الكاميرا نشطة وجاهزة للمسح',
     pointAtQR: 'ضع كود QR داخل الإطار',
-    instantSimulate: 'تجربة مسح فوري للمطاعم',
     orEnterCode: 'أو أدخل كود الختم يدوياً',
     codePlaceholder: 'أدخل الكود السري للمطعم...',
     submitCode: 'تأكيد الختم',
@@ -237,7 +235,6 @@ export const translations: Record<Language, Translations> = {
     scanInstructions: 'Alignez le QR code dans le cadre',
     cameraActive: 'Caméra active et prête',
     pointAtQR: 'Placez le QR code dans le viseur',
-    instantSimulate: 'Test de scan instantané',
     orEnterCode: 'Ou saisir le code manuellement',
     codePlaceholder: 'Code secret du restaurant...',
     submitCode: 'Valider le tampon',
@@ -329,7 +326,6 @@ export const translations: Record<Language, Translations> = {
     scanInstructions: 'Align the QR code within the frame',
     cameraActive: 'Camera active & ready',
     pointAtQR: 'Place QR code inside the box',
-    instantSimulate: 'Instant Restaurant Simulation',
     orEnterCode: 'Or enter stamp secret code manually',
     codePlaceholder: 'Enter restaurant secret code...',
     submitCode: 'Verify Stamp',
