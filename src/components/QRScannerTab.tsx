@@ -11,11 +11,12 @@ import {
   ArrowRight,
   Gift,
   Upload,
-  Zap,
   ShieldCheck,
   X,
   Volume2,
   VolumeX,
+  VideoOff,
+  Lock,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import jsQR from 'jsqr';
@@ -73,11 +74,13 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
   onNavigateToCards,
 }) => {
   const { t, language } = useLanguage();
+
+  // Camera starts OFF by default. It only activates upon user click & permission request!
   const [cameraActive, setCameraActive] = useState<boolean>(false);
+  const [isRequestingPermission, setIsRequestingPermission] = useState<boolean>(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [torchOn, setTorchOn] = useState<boolean>(false);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
-  const [isScanning, setIsScanning] = useState<boolean>(true);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
 
   // Manual code input
@@ -220,7 +223,8 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
             : `${t.stampSuccess} (${restName})`,
         });
 
-        setIsScanning(false);
+        // Pause camera on successful scan
+        stopCamera();
         setManualCodeError(null);
         setUnrecognizedCode(null);
       }
@@ -230,15 +234,17 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
 
   // Core frame-by-frame scanner loop
   const tickScan = useCallback(() => {
-    if (!videoRef.current || !canvasRef.current || !isScanning) {
-      animFrameIdRef.current = requestAnimationFrame(tickScan);
+    if (!videoRef.current || !canvasRef.current || !cameraActive) {
+      if (cameraActive) {
+        animFrameIdRef.current = requestAnimationFrame(tickScan);
+      }
       return;
     }
 
     const video = videoRef.current;
     if (video.readyState === video.HAVE_ENOUGH_DATA) {
       const now = Date.now();
-      // Throttle scanning to ~7 times per second (every 140ms) for maximum responsiveness and 60fps UI
+      // Throttle scanning to ~7 times per second (every 140ms) for high efficiency
       if (now - lastScanTimestampRef.current > 140) {
         lastScanTimestampRef.current = now;
 
@@ -252,7 +258,6 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
 
           try {
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            // Decode with jsQR
             const code = jsQR(imageData.data, imageData.width, imageData.height, {
               inversionAttempts: 'dontInvert',
             });
@@ -272,12 +277,15 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
     }
 
     animFrameIdRef.current = requestAnimationFrame(tickScan);
-  }, [findMatchingRestaurant, handleExecuteValidScan, isScanning]);
+  }, [cameraActive, findMatchingRestaurant, handleExecuteValidScan]);
 
-  // Start Camera Stream
-  const startCamera = async () => {
+  // Start Camera Stream: Requests User Permission explicitly
+  const requestCameraPermissionAndStart = async () => {
+    setIsRequestingPermission(true);
+    setCameraError(null);
+    setUnrecognizedCode(null);
+
     try {
-      setCameraError(null);
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
       }
@@ -285,12 +293,14 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         setCameraError(
           language === 'ar'
-            ? 'الكاميرا غير مدعومة على متصفحك. يرجى إدخال الكود يدوياً أو رفع صورة الـ QR.'
-            : 'Camera not supported. Please enter the store code manually or upload an image.'
+            ? 'متصفحك لا يدعم فتح الكاميرا مباشرة. يمكنك استخدام خانة إدخال الكود كتابة بالأسفل أو رفع صورة.'
+            : 'Camera is not supported on this browser. Please enter the store code manually below.'
         );
+        setIsRequestingPermission(false);
         return;
       }
 
+      // Explicit permission request popup from browser
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: facingMode },
@@ -300,21 +310,32 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
       });
 
       streamRef.current = stream;
+      setCameraActive(true);
+      setIsRequestingPermission(false);
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.setAttribute('playsinline', 'true');
         videoRef.current.play().catch(() => {});
       }
-      setCameraActive(true);
-      setIsScanning(true);
     } catch (err: any) {
-      console.warn('Camera initiation notice:', err);
-      setCameraError(
-        language === 'ar'
-          ? 'يرجى السماح بالوصول للكاميرا لمسح كود QR، أو قم بإدخال كود المحل كتابة بالأسفل.'
-          : 'Please grant camera permissions to scan QR codes, or enter the code manually below.'
-      );
+      console.warn('Camera permission response:', err);
+      setIsRequestingPermission(false);
       setCameraActive(false);
+
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setCameraError(
+          language === 'ar'
+            ? 'تم رفض إذن الكاميرا. يرجى السماح بالوصول للكاميرا من إعدادات المتصفح، أو إدخال كود المحل كتابة بالأسفل.'
+            : 'Camera permission denied. Please allow camera access in browser settings, or enter the code manually.'
+        );
+      } else {
+        setCameraError(
+          language === 'ar'
+            ? 'تعذر الوصول إلى الكاميرا. يمكنك كتابة كود المحل يدوياً بالأسفل.'
+            : 'Unable to access camera. You can enter the store code manually below.'
+        );
+      }
     }
   };
 
@@ -328,16 +349,33 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
       streamRef.current = null;
     }
     setCameraActive(false);
+    setTorchOn(false);
   };
 
+  // Run scanner loop when camera becomes active
   useEffect(() => {
-    startCamera();
-    animFrameIdRef.current = requestAnimationFrame(tickScan);
+    if (cameraActive) {
+      animFrameIdRef.current = requestAnimationFrame(tickScan);
+    } else {
+      if (animFrameIdRef.current) {
+        cancelAnimationFrame(animFrameIdRef.current);
+        animFrameIdRef.current = null;
+      }
+    }
 
+    return () => {
+      if (animFrameIdRef.current) {
+        cancelAnimationFrame(animFrameIdRef.current);
+      }
+    };
+  }, [cameraActive, tickScan]);
+
+  // Clean up stream on unmount
+  useEffect(() => {
     return () => {
       stopCamera();
     };
-  }, [facingMode]);
+  }, []);
 
   // Flashlight toggle
   const toggleTorch = async () => {
@@ -361,7 +399,14 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
 
   // Flip camera between environment (rear) and user (selfie)
   const flipCamera = () => {
-    setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'));
+    const nextMode = facingMode === 'environment' ? 'user' : 'environment';
+    setFacingMode(nextMode);
+    if (cameraActive) {
+      stopCamera();
+      setTimeout(() => {
+        requestCameraPermissionAndStart();
+      }, 100);
+    }
   };
 
   // Handle Image File Pick for QR decoding
@@ -394,7 +439,7 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
           } else {
             alert(
               language === 'ar'
-                ? 'لم يتم العثور على رمز QR واضح في الصورة. يرجى تجربة صورة أوضح أو مسحه بالكاميرا.'
+                ? 'لم يتم العثور على رمز QR واضح في الصورة. يرجى تجربة صورة أوضح أو كتابة الكود.'
                 : 'No QR code detected in this image. Please try a clearer image.'
             );
           }
@@ -439,10 +484,10 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
 
   const handleScanAnother = () => {
     setScanResult(null);
-    setIsScanning(true);
     setUnrecognizedCode(null);
     setManualCodeError(null);
     lastScanTimestampRef.current = 0;
+    // Don't auto start camera; let user press button
   };
 
   return (
@@ -464,10 +509,14 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
         <div>
           <h1 className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
             <span>{t.scannerTitle}</span>
-            <span className="w-2.5 h-2.5 rounded-full bg-[#76FF03] animate-pulse" />
+            <span
+              className={`w-2.5 h-2.5 rounded-full ${
+                cameraActive ? 'bg-[#76FF03] animate-pulse' : 'bg-zinc-600'
+              }`}
+            />
           </h1>
           <p className="text-xs text-zinc-400 mt-0.5">
-            {t.scannerSubtitle} · كاميرا سريعة ودقيقة
+            {cameraActive ? 'الكاميرا نشطة ومستعدة للمسح' : 'اضغط على الزر أدناه لتفعيل الكاميرا ومسح الرمز'}
           </p>
         </div>
 
@@ -497,7 +546,7 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
           </div>
           <button
             onClick={() => setUnrecognizedCode(null)}
-            className="p-1 rounded-lg text-amber-400 hover:text-white"
+            className="p-1 rounded-lg text-amber-400 hover:text-white cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -598,122 +647,155 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
       )}
 
       {/* ========================================================
-          LARGE, SMOOTH CAMERA SCANNER VIEWFINDER
+          LARGE CAMERA SCANNER VIEWFINDER
+          (Controlled via button click & user permission prompt)
       ======================================================== */}
       <div className="relative w-full aspect-[3/4] sm:aspect-square min-h-[420px] max-h-[580px] bg-zinc-950 rounded-3xl overflow-hidden border-2 border-zinc-800/90 shadow-2xl mb-4 flex items-center justify-center">
-        {/* Video feed */}
         {cameraActive ? (
-          <video
-            ref={videoRef}
-            playsInline
-            autoPlay
-            muted
-            className="w-full h-full object-cover scale-100"
-          />
-        ) : (
-          <div className="p-6 text-center text-zinc-500 z-10">
-            <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-800 text-[#76FF03] mx-auto mb-3 flex items-center justify-center shadow-lg">
-              <Camera className="w-8 h-8" />
+          <>
+            {/* Live Camera Video stream */}
+            <video
+              ref={videoRef}
+              playsInline
+              autoPlay
+              muted
+              className="w-full h-full object-cover"
+            />
+
+            {/* Viewfinder Target Reticle Frame & Laser Scan Bar */}
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center p-6 sm:p-10">
+              <div className="w-64 h-64 sm:w-72 sm:h-72 relative">
+                {/* Top-Left Corner */}
+                <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-[#76FF03] rounded-tl-2xl shadow-[0_0_15px_#76FF03]" />
+                {/* Top-Right Corner */}
+                <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-[#76FF03] rounded-tr-2xl shadow-[0_0_15px_#76FF03]" />
+                {/* Bottom-Left Corner */}
+                <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-[#76FF03] rounded-bl-2xl shadow-[0_0_15px_#76FF03]" />
+                {/* Bottom-Right Corner */}
+                <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-[#76FF03] rounded-br-2xl shadow-[0_0_15px_#76FF03]" />
+
+                {/* Central Target Radar Pulse */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-14 h-14 rounded-full border border-[#76FF03]/30 animate-ping opacity-40" />
+                  <div className="w-3 h-3 rounded-full bg-[#76FF03]/60 shadow-[0_0_10px_#76FF03]" />
+                </div>
+
+                {/* Glowing Laser Scan Bar */}
+                <div
+                  className="absolute left-2 right-2 h-1 bg-gradient-to-r from-transparent via-[#76FF03] to-transparent shadow-[0_0_18px_#76FF03] animate-bounce"
+                  style={{
+                    animationDuration: '2.2s',
+                    animationIterationCount: 'infinite',
+                  }}
+                />
+              </div>
             </div>
-            <p className="text-xs text-zinc-300 max-w-xs mx-auto mb-4 font-medium leading-relaxed">
-              {cameraError || 'جارِ تشغيل عدسة الكاميرا عالية الدقة...'}
+
+            {/* Top Controls Overlay inside Viewfinder */}
+            <div className="absolute top-3.5 left-3.5 right-3.5 flex items-center justify-between z-20">
+              <div className="px-3 py-1.5 rounded-full bg-black/75 backdrop-blur-md text-[11px] font-mono text-[#76FF03] border border-zinc-800 flex items-center gap-2 shadow-lg">
+                <span className="w-2 h-2 rounded-full bg-[#76FF03] animate-ping" />
+                <span className="font-bold">الكاميرا تعمل · وجّه نحو الكود</span>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                {/* Torch toggle */}
+                <button
+                  onClick={toggleTorch}
+                  className={`p-2.5 rounded-xl backdrop-blur-md border transition-all cursor-pointer ${
+                    torchOn
+                      ? 'bg-[#76FF03] text-black border-[#76FF03] shadow-lg shadow-[#76FF03]/40'
+                      : 'bg-black/70 text-zinc-300 border-zinc-800 hover:text-white'
+                  }`}
+                  title="فلاش الكاميرا / Flashlight"
+                >
+                  <Flashlight className="w-4 h-4" />
+                </button>
+
+                {/* Flip camera */}
+                <button
+                  onClick={flipCamera}
+                  className="p-2.5 rounded-xl bg-black/70 backdrop-blur-md border border-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                  title="قلب الكاميرا الأمامية/الخلفية"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+
+                {/* Turn off camera button */}
+                <button
+                  onClick={stopCamera}
+                  className="p-2.5 rounded-xl bg-red-950/80 hover:bg-red-900 border border-red-800/80 text-red-200 transition-colors cursor-pointer"
+                  title="إيقاف الكاميرا"
+                >
+                  <VideoOff className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Bottom Helper overlay */}
+            <div className="absolute bottom-3 left-3 right-3 text-center pointer-events-none z-20">
+              <span className="px-3 py-1 rounded-full bg-black/80 backdrop-blur-md text-[11px] font-medium text-zinc-300 border border-zinc-800 inline-block shadow-md">
+                ضع رمز QR الخاص بالمحل داخل المربع للكشف عنه تلقائياً
+              </span>
+            </div>
+          </>
+        ) : (
+          /* ========================================================
+             STANDBY / READY TO SCAN STATE (NO AUTO CAMERA)
+             User explicitly clicks to request permission & open camera
+          ======================================================== */
+          <div className="p-6 text-center text-zinc-400 z-10 flex flex-col items-center justify-center max-w-sm">
+            {/* Glowing Icon Frame */}
+            <div className="w-20 h-20 rounded-3xl bg-zinc-900 border-2 border-zinc-800 text-[#76FF03] flex items-center justify-center mb-4 shadow-xl relative group">
+              <div className="absolute inset-0 bg-[#76FF03]/10 rounded-3xl blur-md" />
+              <Camera className="w-10 h-10 relative z-10 stroke-[2.2]" />
+            </div>
+
+            <h3 className="text-base font-extrabold text-white mb-1.5">
+              مسح رمز الـ QR لكسب الختم
+            </h3>
+
+            <p className="text-xs text-zinc-400 mb-6 leading-relaxed">
+              اضغط على الزر أدناه لتشغيل الكاميرا والموافقة على إذن الاستخدام، ثم وجه هاتفك نحو رمز QR المعلق لدى كاشير المحل.
             </p>
-            <div className="flex items-center justify-center gap-2">
-              <button
-                onClick={startCamera}
-                className="px-4 py-2 rounded-xl bg-[#76FF03] hover:bg-[#8aff24] text-black text-xs font-bold transition-all shadow-md shadow-[#76FF03]/20 cursor-pointer"
-              >
-                إعادة تشغيل الكاميرا
-              </button>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold border border-zinc-800 transition-colors cursor-pointer flex items-center gap-1.5"
-              >
-                <Upload className="w-3.5 h-3.5 text-[#76FF03]" />
-                <span>رفع صورة</span>
-              </button>
+
+            {/* Camera Error Notice if permission was denied */}
+            {cameraError && (
+              <div className="w-full mb-4 p-3 rounded-2xl bg-red-950/70 border border-red-800/60 text-red-200 text-xs text-left leading-relaxed flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <span>{cameraError}</span>
+              </div>
+            )}
+
+            {/* MAIN BUTTON: OPEN CAMERA & REQUEST PERMISSION */}
+            <button
+              onClick={requestCameraPermissionAndStart}
+              disabled={isRequestingPermission}
+              className="w-full py-4 px-6 rounded-2xl bg-[#76FF03] hover:bg-[#8aff24] active:scale-[0.98] text-black font-black text-sm flex items-center justify-center gap-2.5 shadow-xl shadow-[#76FF03]/25 transition-all cursor-pointer disabled:opacity-50"
+            >
+              <Camera className="w-5 h-5 stroke-[2.5]" />
+              <span>
+                {isRequestingPermission
+                  ? 'جارِ طلب إذن الكاميرا...'
+                  : 'فتح الكاميرا وطلب الإذن للمسح'}
+              </span>
+            </button>
+
+            {/* SECONDARY ACTION: UPLOAD FROM GALLERY */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="mt-3 w-full py-2.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-850 text-zinc-300 hover:text-white text-xs font-semibold border border-zinc-800 transition-colors cursor-pointer flex items-center justify-center gap-2"
+            >
+              <Upload className="w-4 h-4 text-[#76FF03]" />
+              <span>أو اختر صورة لرمز الـ QR من ألبوم الهاتف</span>
+            </button>
+
+            <div className="mt-4 flex items-center gap-1.5 text-[11px] text-zinc-500">
+              <Lock className="w-3 h-3 text-[#76FF03]" />
+              <span>يتم استخدام الكاميرا محلياً لمسح الرمز فقط</span>
             </div>
           </div>
         )}
-
-        {/* Viewfinder Target Reticle Frame & Laser Scan Bar */}
-        <div className="absolute inset-0 pointer-events-none flex items-center justify-center p-6 sm:p-10">
-          <div className="w-64 h-64 sm:w-72 sm:h-72 relative">
-            {/* Top-Left Corner */}
-            <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-[#76FF03] rounded-tl-2xl shadow-[0_0_15px_#76FF03]" />
-            {/* Top-Right Corner */}
-            <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-[#76FF03] rounded-tr-2xl shadow-[0_0_15px_#76FF03]" />
-            {/* Bottom-Left Corner */}
-            <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-[#76FF03] rounded-bl-2xl shadow-[0_0_15px_#76FF03]" />
-            {/* Bottom-Right Corner */}
-            <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-[#76FF03] rounded-br-2xl shadow-[0_0_15px_#76FF03]" />
-
-            {/* Central Target Radar Pulse */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-14 h-14 rounded-full border border-[#76FF03]/30 animate-ping opacity-40" />
-              <div className="w-3 h-3 rounded-full bg-[#76FF03]/60 shadow-[0_0_10px_#76FF03]" />
-            </div>
-
-            {/* Glowing Laser Scan Bar */}
-            {isScanning && cameraActive && (
-              <div
-                className="absolute left-2 right-2 h-1 bg-gradient-to-r from-transparent via-[#76FF03] to-transparent shadow-[0_0_18px_#76FF03] animate-bounce"
-                style={{
-                  animationDuration: '2.2s',
-                  animationIterationCount: 'infinite',
-                }}
-              />
-            )}
-          </div>
-        </div>
-
-        {/* Top Controls Overlay inside Viewfinder */}
-        <div className="absolute top-3.5 left-3.5 right-3.5 flex items-center justify-between z-20">
-          <div className="px-3 py-1.5 rounded-full bg-black/75 backdrop-blur-md text-[11px] font-mono text-[#76FF03] border border-zinc-800 flex items-center gap-2 shadow-lg">
-            <span className="w-2 h-2 rounded-full bg-[#76FF03] animate-ping" />
-            <span className="font-bold">Pointili Cam · مسح مباشر</span>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            {/* Torch toggle */}
-            <button
-              onClick={toggleTorch}
-              className={`p-2.5 rounded-xl backdrop-blur-md border transition-all cursor-pointer ${
-                torchOn
-                  ? 'bg-[#76FF03] text-black border-[#76FF03] shadow-lg shadow-[#76FF03]/40'
-                  : 'bg-black/70 text-zinc-300 border-zinc-800 hover:text-white'
-              }`}
-              title="فلاش الكاميرا / Flashlight"
-            >
-              <Flashlight className="w-4 h-4" />
-            </button>
-
-            {/* Flip camera */}
-            <button
-              onClick={flipCamera}
-              className="p-2.5 rounded-xl bg-black/70 backdrop-blur-md border border-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer"
-              title="قلب الكاميرا الأمامية/الخلفية"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-
-            {/* Upload QR image */}
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="p-2.5 rounded-xl bg-black/70 backdrop-blur-md border border-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer"
-              title="رفع صورة تحتوي على رمز QR"
-            >
-              <Upload className="w-4 h-4 text-[#76FF03]" />
-            </button>
-          </div>
-        </div>
-
-        {/* Bottom Helper overlay inside Viewfinder */}
-        <div className="absolute bottom-3 left-3 right-3 text-center pointer-events-none z-20">
-          <span className="px-3 py-1 rounded-full bg-black/80 backdrop-blur-md text-[11px] font-medium text-zinc-300 border border-zinc-800 inline-block shadow-md">
-            وجّه الكاميرا نحو رمز QR الملصق لدى المحل لكسب الختم تلقائياً
-          </span>
-        </div>
       </div>
 
       {/* ========================================================
