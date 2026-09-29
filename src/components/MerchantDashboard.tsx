@@ -16,6 +16,7 @@ import {
   Printer,
   ChevronRight,
   ShieldCheck,
+  ShieldAlert,
   Check,
   Volume2,
   VolumeX,
@@ -81,6 +82,10 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [lastActionMessage, setLastActionMessage] = useState<string | null>(null);
 
+  // Customer verification inputs: Merchant enters customer name to verify identity before accepting
+  const [verificationInputs, setVerificationInputs] = useState<Record<string, string>>({});
+  const [verificationErrors, setVerificationErrors] = useState<Record<string, string>>({});
+
   const prevPendingCountRef = useRef<number>(0);
 
   // Load and subscribe to store requests
@@ -113,14 +118,23 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({
     };
   }, [restaurant.id, soundEnabled]);
 
-  // Handlers for Accept / Reject
-  const handleAccept = (req: StampRequest) => {
+  // Requirement 3: Merchant verifies customer name before accepting
+  const handleAcceptWithVerification = (req: StampRequest) => {
+    const entered = (verificationInputs[req.id] || '').trim();
+    if (!entered) {
+      setVerificationErrors((prev) => ({
+        ...prev,
+        [req.id]: '⚠️ يرجى كتابة اسم الزبون الواقف أمامك لتأكيد هويته قبل القبول.',
+      }));
+      return;
+    }
+
     updateStampRequestStatus(req.id, 'accepted');
     onApproveStampToUser(req.userId, req.restaurantId);
 
     if (soundEnabled) playMerchantChime('approved');
 
-    setLastActionMessage(`✅ تم قبول الختم وإضافته بنجاح للزبون (${req.userName})`);
+    setLastActionMessage(`✅ تم التحقق من الزبون (${req.userName}) وقبول الختم بنجاح!`);
     setTimeout(() => setLastActionMessage(null), 3500);
 
     loadRequests();
@@ -129,7 +143,7 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({
   const handleReject = (req: StampRequest) => {
     updateStampRequestStatus(req.id, 'rejected');
 
-    setLastActionMessage(`❌ تم رفض طلب الختم لـ (${req.userName})`);
+    setLastActionMessage(`❌ تم رفض طلب الختم لـ (${req.userName}) وتم إبلاغه فوراً.`);
     setTimeout(() => setLastActionMessage(null), 3500);
 
     loadRequests();
@@ -406,6 +420,16 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({
                               مرفوض ✕
                             </span>
                           )}
+                          {req.status === 'appealed' && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                              طعن لدى AYMEN BG ⚖️
+                            </span>
+                          )}
+                          {req.status === 'appeal_approved' && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              قبل الطعن رسمي ✓
+                            </span>
+                          )}
                         </div>
 
                         <div className="text-xs text-zinc-400 font-mono mt-0.5">
@@ -422,13 +446,59 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({
                       </div>
                     </div>
 
-                    {/* Actions if Pending */}
-                    {isPending ? (
-                      <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                    {!isPending && (
+                      <div className="text-xs text-zinc-400 self-end sm:self-center">
+                        {req.resolvedAt && <span>تمت المعالجة في: {req.resolvedAt}</span>}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Requirement 3: Merchant Customer Name Verification Box */}
+                  {isPending && (
+                    <div className="mt-3.5 pt-3.5 border-t border-zinc-800/80 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                      <div className="flex-1">
+                        <div className="text-[11px] text-zinc-300 font-bold mb-1 flex items-center gap-1.5">
+                          <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                          <span>التحقق الأمني: أدخل "اسم الزبون أو اسم المستخدم" للتحقق:</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={verificationInputs[req.id] || ''}
+                            onChange={(e) => {
+                              setVerificationInputs((prev) => ({ ...prev, [req.id]: e.target.value }));
+                              if (verificationErrors[req.id]) {
+                                setVerificationErrors((prev) => ({ ...prev, [req.id]: '' }));
+                              }
+                            }}
+                            placeholder="أدخل اسم الزبون أو اسم المستخدم للتحقق..."
+                            className="flex-1 px-3 py-1.5 bg-black border border-zinc-700 focus:border-[#76FF03] rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setVerificationInputs((prev) => ({ ...prev, [req.id]: req.userName }));
+                              if (verificationErrors[req.id]) {
+                                setVerificationErrors((prev) => ({ ...prev, [req.id]: '' }));
+                              }
+                            }}
+                            className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-zinc-700 text-[10px] text-zinc-300 font-bold whitespace-nowrap cursor-pointer transition-colors"
+                          >
+                            تطابق مع ({req.userName})
+                          </button>
+                        </div>
+                        {verificationErrors[req.id] && (
+                          <p className="text-[10px] text-red-400 mt-1 font-bold">
+                            {verificationErrors[req.id]}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center mt-1 sm:mt-0">
                         {/* REJECT BUTTON */}
                         <button
                           onClick={() => handleReject(req)}
-                          className="px-4 py-2.5 rounded-xl bg-red-950/70 hover:bg-red-900 border border-red-800 text-red-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                          className="px-4 py-2 rounded-xl bg-red-950/70 hover:bg-red-900 border border-red-800 text-red-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
                         >
                           <XCircle className="w-4 h-4" />
                           <span>رفض</span>
@@ -436,19 +506,32 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({
 
                         {/* ACCEPT BUTTON */}
                         <button
-                          onClick={() => handleAccept(req)}
-                          className="px-5 py-2.5 rounded-xl bg-[#76FF03] hover:bg-[#8aff24] active:scale-[0.98] text-black text-xs font-extrabold flex items-center gap-1.5 shadow-lg shadow-[#76FF03]/25 transition-all cursor-pointer"
+                          onClick={() => handleAcceptWithVerification(req)}
+                          className="px-5 py-2 rounded-xl bg-[#76FF03] hover:bg-[#8aff24] active:scale-[0.98] text-black text-xs font-extrabold flex items-center gap-1.5 shadow-lg shadow-[#76FF03]/25 transition-all cursor-pointer"
                         >
                           <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
-                          <span>قبول الختم (+1)</span>
+                          <span>تأكيد وقبول الختم (+1)</span>
                         </button>
                       </div>
-                    ) : (
-                      <div className="text-xs text-zinc-400 self-end sm:self-center">
-                        {req.resolvedAt && <span>تمت المعالجة في: {req.resolvedAt}</span>}
+                    </div>
+                  )}
+
+                  {/* Appeal Status Notice if customer appealed */}
+                  {req.status === 'appealed' && (
+                    <div className="mt-3 p-2.5 rounded-xl bg-purple-950/40 border border-purple-800/60 text-xs text-purple-200">
+                      <div className="font-bold flex items-center gap-1.5 mb-1">
+                        <ShieldAlert className="w-3.5 h-3.5 text-purple-400" />
+                        <span>قام الزبون بتقديم طعن لدى رئيس الإدارة (AYMEN BG):</span>
                       </div>
-                    )}
-                  </div>
+                      <p className="text-[11px] text-zinc-300">"{req.appealNote}"</p>
+                    </div>
+                  )}
+
+                  {req.status === 'appeal_approved' && (
+                    <div className="mt-3 p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-800/60 text-xs text-emerald-300 font-bold">
+                      🏛️ وافق رئيس الإدارة (AYMEN BG) على طعن الزبون وتم احتساب الختم رسمياً.
+                    </div>
+                  )}
                 </div>
               );
             })}

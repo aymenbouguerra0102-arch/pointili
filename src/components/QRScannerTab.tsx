@@ -19,6 +19,7 @@ import {
   Store,
   RefreshCw,
   Volume2,
+  Send,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import jsQR from 'jsqr';
@@ -28,6 +29,7 @@ import {
   createStampRequest,
   getStampRequests,
   updateStampRequestStatus,
+  submitStampRequestAppeal,
 } from '../data/stampRequestsManager';
 import {
   validateScannedQR,
@@ -46,6 +48,8 @@ interface QRScannerTabProps {
   };
   onNavigateToCards: () => void;
   preSelectedRestaurant?: Restaurant | null;
+  autoTriggerVerifyAndSend?: boolean;
+  onResetAutoTrigger?: () => void;
 }
 
 // Synthesize pleasant chime on successful scan using Web Audio API
@@ -122,6 +126,8 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
   onAddStamp,
   onNavigateToCards,
   preSelectedRestaurant,
+  autoTriggerVerifyAndSend,
+  onResetAutoTrigger,
 }) => {
   const { t, language } = useLanguage();
 
@@ -163,8 +169,13 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
 
   // ANTI-FRAUD PENDING REQUEST STATE
   const [activeRequest, setActiveRequest] = useState<StampRequest | null>(null);
-  const [requestResolvedState, setRequestResolvedState] = useState<'pending' | 'accepted' | 'rejected'>('pending');
+  const [requestResolvedState, setRequestResolvedState] = useState<
+    'pending' | 'accepted' | 'rejected' | 'appealed' | 'appeal_approved' | 'appeal_rejected'
+  >('pending');
   const [newStampCount, setNewStampCount] = useState<number>(0);
+  const [showAppealForm, setShowAppealForm] = useState<boolean>(false);
+  const [appealNote, setAppealNote] = useState<string>('');
+  const [appealSent, setAppealSent] = useState<boolean>(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -257,6 +268,56 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
     [activeStore, handleInitiateStampRequest, stopCamera, voiceEnabled]
   );
 
+  // Requirement: "تحقق وأرسل" Action at SCAN ME
+  const handleVerifyAndSendCurrent = useCallback(
+    (customCode?: string) => {
+      if (isHandlingScanRef.current) return;
+
+      const officialInfo = getStoreQRInfo(activeStore);
+      const codeToValidate =
+        customCode ||
+        officialInfo?.payload ||
+        activeStore.qrSecretCode ||
+        `pointili://scan?store=${activeStore.id}`;
+
+      // Central anti-fraud verification
+      const validation = validateScannedQR(codeToValidate, activeStore);
+
+      if (validation.isValid) {
+        handleInitiateStampRequest(activeStore);
+      } else {
+        playErrorTone();
+        navigator.vibrate?.([200, 100, 200]);
+
+        if (voiceEnabled && validation.spokenWarning) {
+          speakAlert(validation.spokenWarning);
+        }
+
+        setMismatchError({
+          errorMessage:
+            validation.errorMessage ||
+            `❌ كود غير مطابق! رمز الـ QR لا يخص ${activeStore.nameAr || activeStore.name}.`,
+          scannedStoreName: validation.scannedStoreName,
+          scannedStoreArabicName: validation.scannedStoreArabicName,
+          rawPayload: validation.rawPayload || codeToValidate,
+          scannedStoreKey: validation.scannedStoreKey,
+          identifiedStore: validation.identifiedStore,
+          spokenWarning: validation.spokenWarning,
+        });
+        stopCamera();
+      }
+    },
+    [activeStore, handleInitiateStampRequest, stopCamera, voiceEnabled]
+  );
+
+  // Auto-trigger verify and send if navigated with autoTrigger flag
+  useEffect(() => {
+    if (autoTriggerVerifyAndSend && activeStore) {
+      handleVerifyAndSendCurrent();
+      onResetAutoTrigger?.();
+    }
+  }, [autoTriggerVerifyAndSend, activeStore, handleVerifyAndSendCurrent, onResetAutoTrigger]);
+
   // Live polling & event listener for merchant's Accept/Reject action
   useEffect(() => {
     if (!activeRequest) return;
@@ -289,6 +350,24 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
         } else if (current.status === 'rejected' && requestResolvedState === 'pending') {
           setRequestResolvedState('rejected');
           navigator.vibrate?.([200, 100, 200]);
+        } else if (current.status === 'appeal_approved' && (requestResolvedState === 'rejected' || requestResolvedState === 'appealed')) {
+          // Master Admin AYMEN BG approved appeal!
+          setRequestResolvedState('appeal_approved');
+          const result = onAddStamp(current.restaurantId);
+          setNewStampCount(result.newCount);
+
+          playScanChime();
+          navigator.vibrate?.([120, 60, 120]);
+
+          confetti({
+            particleCount: 150,
+            spread: 90,
+            origin: { y: 0.6 },
+            colors: ['#76FF03', '#FFFFFF', '#9C27B0'],
+          });
+        } else if (current.status === 'appeal_rejected' && (requestResolvedState === 'rejected' || requestResolvedState === 'appealed')) {
+          setRequestResolvedState('appeal_rejected');
+          navigator.vibrate?.([250, 100, 250]);
         }
       }
     };
@@ -506,6 +585,9 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
   const handleDismissPending = () => {
     setActiveRequest(null);
     setRequestResolvedState('pending');
+    setShowAppealForm(false);
+    setAppealNote('');
+    setAppealSent(false);
     isHandlingScanRef.current = false;
     startCamera();
   };
@@ -662,8 +744,14 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
             </p>
           </div>
 
-          {/* 4 White Corner Brackets ("L" Shapes) */}
+          {/* 4 White Corner Brackets ("L" Shapes) with SCAN ME badge */}
           <div className="relative w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center">
+            {/* SCAN ME Glowing Indicator Badge */}
+            <div className="absolute -top-3.5 px-3 py-0.5 rounded-full bg-[#76FF03] text-black font-black text-[11px] tracking-wider shadow-lg shadow-[#76FF03]/40 flex items-center gap-1 uppercase z-20">
+              <QrCode className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>SCAN ME</span>
+            </div>
+
             <div className="absolute top-0 left-0 w-11 h-11 border-t-[5px] border-l-[5px] border-white rounded-tl-sm drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]" />
             <div className="absolute top-0 right-0 w-11 h-11 border-t-[5px] border-r-[5px] border-white rounded-tr-sm drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]" />
             <div className="absolute bottom-0 left-0 w-11 h-11 border-b-[5px] border-l-[5px] border-white rounded-bl-sm drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]" />
@@ -675,6 +763,19 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
                 style={{ animationDuration: '2.4s', animationIterationCount: 'infinite' }}
               />
             )}
+          </div>
+
+          {/* Action Button: "تحقق وأرسل" directly at SCAN ME */}
+          <div className="pointer-events-auto my-1.5 z-20">
+            <button
+              type="button"
+              onClick={() => handleVerifyAndSendCurrent()}
+              className="py-2.5 px-6 rounded-2xl bg-[#76FF03] hover:bg-[#8aff24] active:scale-95 text-black font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xl shadow-[#76FF03]/30 transition-all cursor-pointer border border-[#76FF03]"
+              title="التحقق من الكود وإرسال طلب الختم مباشرة للمحل"
+            >
+              <Send className="w-4 h-4 stroke-[2.5]" />
+              <span>تحقق وأرسل</span>
+            </button>
           </div>
 
           {/* Bottom Dark Bar with Flashlight & Gallery Buttons */}
@@ -921,11 +1022,136 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
                 </div>
 
                 <h3 className="text-lg font-extrabold text-white mb-1">
-                  عذراً، رفض صاحب المحل الطلب
+                  ❌ تم رفض طلبك من قِبل المتجر!
+                </h3>
+
+                <p className="text-xs text-zinc-300 mb-4 leading-relaxed">
+                  تم إعلامك فوراً بأن كاشير متجر <strong className="text-red-400">{activeRequest.restaurantName}</strong> قد رفض طلب الختم.
+                </p>
+
+                {/* Appeal Flow (Requirement 4) */}
+                {!appealSent ? (
+                  !showAppealForm ? (
+                    <div className="space-y-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setShowAppealForm(true)}
+                        className="w-full py-3 px-4 rounded-xl bg-purple-900/60 hover:bg-purple-800/80 border border-purple-600 text-purple-200 font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg shadow-purple-900/20 transition-all cursor-pointer"
+                      >
+                        <ShieldAlert className="w-4 h-4 text-purple-400" />
+                        <span>تقديم طعن لدى رئيس الإدارة (AYMEN BG) ⚖️</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleDismissPending}
+                        className="w-full py-2.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white font-bold text-xs border border-zinc-800 transition-colors cursor-pointer"
+                      >
+                        إغلاق والعودة
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-black/80 border border-purple-700/80 rounded-2xl mb-3 text-right animate-in fade-in">
+                      <label className="block text-[11px] font-bold text-purple-300 mb-1.5 flex items-center justify-between">
+                        <span>سبب تقديم الطعن لرئيس الإدارة (AYMEN BG):</span>
+                        <span className="text-[10px] text-zinc-500 font-mono">نظام الفصل النهائي</span>
+                      </label>
+                      <textarea
+                        value={appealNote}
+                        onChange={(e) => setAppealNote(e.target.value)}
+                        placeholder="اكتب توضيحك (مثال: كنت حاضراً في المحل واشتريت وجبة وتم الرفض بالخطأ)..."
+                        rows={3}
+                        className="w-full p-2.5 bg-zinc-900 border border-zinc-700 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-400 resize-none font-medium"
+                      />
+                      <div className="flex gap-2 mt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (activeRequest) {
+                              submitStampRequestAppeal(activeRequest.id, appealNote);
+                              setAppealSent(true);
+                            }
+                          }}
+                          className="flex-1 py-2.5 px-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          <span>إرسال الطعن لـ AYMEN BG</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowAppealForm(false)}
+                          className="py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white text-xs font-bold border border-zinc-800 cursor-pointer"
+                        >
+                          إلغاء
+                        </button>
+                      </div>
+                    </div>
+                  )
+                ) : (
+                  <div className="space-y-3 animate-in fade-in">
+                    <div className="p-4 rounded-2xl bg-purple-950/70 border border-purple-700 text-center">
+                      <div className="text-sm font-extrabold text-purple-200 mb-1.5 flex items-center justify-center gap-1.5">
+                        <ShieldCheck className="w-4 h-4 text-purple-400" />
+                        <span>تم تقديم الطعن بنجاح!</span>
+                      </div>
+                      <p className="text-xs text-zinc-300 leading-relaxed">
+                        أُرسل طلبك مباشرة إلى مالك التطبيق ورئيس الإدارة <strong>(AYMEN BG)</strong> لكي يقوم بمراجعته والفصل فيه نهائياً.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleDismissPending}
+                      className="w-full py-3 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-xs border border-zinc-800 transition-colors cursor-pointer"
+                    >
+                      حسناً، فهمت
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {requestResolvedState === 'appeal_approved' && (
+              <>
+                <div className="w-16 h-16 rounded-2xl bg-[#76FF03] text-black mx-auto mb-3 flex items-center justify-center shadow-xl shadow-[#76FF03]/40">
+                  <CheckCircle2 className="w-9 h-9 stroke-[2.5]" />
+                </div>
+
+                <h3 className="text-lg font-extrabold text-white mb-1">
+                  🏛️ وافق رئيس الإدارة (AYMEN BG) على طعنك!
+                </h3>
+
+                <p className="text-xs text-zinc-300 mb-4 leading-relaxed">
+                  فصل رئيس الإدارة <strong className="text-[#76FF03]">AYMEN BG</strong> في طعنك وقرر قبول احتساب الختم رسمياً في بطاقة {activeRequest?.restaurantName}.
+                </p>
+
+                <div className="p-3 rounded-2xl bg-black border border-zinc-800 text-xs text-zinc-400 mb-4">
+                  رصيدك الجديد بعد الفصل: <strong className="text-[#76FF03] font-mono text-sm">{newStampCount} / 6 أختام</strong>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={onNavigateToCards}
+                  className="w-full py-3.5 px-4 rounded-xl bg-[#76FF03] hover:bg-[#8aff24] text-black font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#76FF03]/30 transition-all cursor-pointer"
+                >
+                  <span>عرض بطاقتي المحدثة</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </>
+            )}
+
+            {requestResolvedState === 'appeal_rejected' && (
+              <>
+                <div className="w-16 h-16 rounded-2xl bg-zinc-900 border-2 border-red-700 text-red-400 mx-auto mb-3 flex items-center justify-center shadow-xl shadow-red-700/20">
+                  <AlertCircle className="w-8 h-8 stroke-[2.5]" />
+                </div>
+
+                <h3 className="text-lg font-extrabold text-white mb-1">
+                  ⚖️ قرار نهائي من رئيس الإدارة (AYMEN BG)
                 </h3>
 
                 <p className="text-xs text-zinc-400 mb-5 leading-relaxed">
-                  لم يتم اعتماد الختم من قِبل كاشير {activeRequest.restaurantName}. تأكد من تواجدك في المحل واستلام الخدمة مباشرة.
+                  بعد مراجعة المعطيات من قِبل رئيس الإدارة (AYMEN BG)، تم تثبيت قرار رفض الختم لهذا الطلب نهائياً.
                 </p>
 
                 <button

@@ -104,7 +104,7 @@ export function createStampRequest(data: {
 
 export function updateStampRequestStatus(
   requestId: string,
-  status: 'accepted' | 'rejected'
+  status: StampRequest['status']
 ): StampRequest | null {
   const current = getStampRequests();
   let updatedItem: StampRequest | null = null;
@@ -115,7 +115,10 @@ export function updateStampRequestStatus(
         ...req,
         status,
         resolvedAt: new Date().toLocaleTimeString('ar-DZ', { hour: '2-digit', minute: '2-digit' }),
-        newStampsAfter: status === 'accepted' ? Math.min(6, req.currentStampsBefore + 1) : req.currentStampsBefore,
+        newStampsAfter:
+          status === 'accepted' || status === 'appeal_approved'
+            ? Math.min(6, req.currentStampsBefore + 1)
+            : req.currentStampsBefore,
       };
       return updatedItem;
     }
@@ -126,6 +129,76 @@ export function updateStampRequestStatus(
     saveStampRequests(updated);
   }
   return updatedItem;
+}
+
+/**
+ * Requirement 4: Submit appeal from customer to Master Admin (AYMEN BG)
+ */
+export function submitStampRequestAppeal(
+  requestId: string,
+  appealNote: string
+): StampRequest | null {
+  const current = getStampRequests();
+  let updatedItem: StampRequest | null = null;
+
+  const updated: StampRequest[] = current.map((req): StampRequest => {
+    if (req.id === requestId) {
+      const modified: StampRequest = {
+        ...req,
+        status: 'appealed' as const,
+        appealNote: appealNote.trim() || 'طعن مقدم من الزبون بعد رفض المحل',
+        appealedAt: new Date().toLocaleTimeString('ar-DZ', { hour: '2-digit', minute: '2-digit' }),
+      };
+      updatedItem = modified;
+      return modified;
+    }
+    return req;
+  });
+
+  if (updatedItem) {
+    saveStampRequests(updated);
+  }
+  return updatedItem;
+}
+
+/**
+ * Requirement 4: Master Admin (AYMEN BG) resolves customer appeal
+ */
+export function resolveStampRequestAppeal(
+  requestId: string,
+  verdict: 'approved' | 'rejected',
+  adminNote?: string
+): StampRequest | null {
+  const current = getStampRequests();
+  let updatedItem: StampRequest | null = null;
+
+  const updated: StampRequest[] = current.map((req): StampRequest => {
+    if (req.id === requestId) {
+      const isApproved = verdict === 'approved';
+      const modified: StampRequest = {
+        ...req,
+        status: isApproved ? ('appeal_approved' as const) : ('appeal_rejected' as const),
+        appealVerdict: verdict,
+        appealVerdictNote: adminNote || (isApproved ? 'تمت الموافقة على الطعن واحتساب الختم' : 'تم تثبيت الرفض بعد المراجعة'),
+        appealResolvedBy: 'AYMEN BG (رئيس الإدارة)',
+        appealResolvedAt: new Date().toLocaleTimeString('ar-DZ', { hour: '2-digit', minute: '2-digit' }),
+        newStampsAfter: isApproved ? Math.min(6, req.currentStampsBefore + 1) : req.currentStampsBefore,
+      };
+      updatedItem = modified;
+      return modified;
+    }
+    return req;
+  });
+
+  if (updatedItem) {
+    saveStampRequests(updated);
+  }
+  return updatedItem;
+}
+
+export function getAppealedStampRequests(): StampRequest[] {
+  const all = getStampRequests();
+  return all.filter((r) => r.status === 'appealed');
 }
 
 export function getStoreStampRequests(restaurantId: string): StampRequest[] {

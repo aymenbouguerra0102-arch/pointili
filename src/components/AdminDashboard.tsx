@@ -40,7 +40,11 @@ import {
   clearAllRealLogs,
   RealScanLogEvent,
 } from '../data/adminMockData';
-import { getStampRequests, updateStampRequestStatus } from '../data/stampRequestsManager';
+import {
+  getStampRequests,
+  updateStampRequestStatus,
+  resolveStampRequestAppeal,
+} from '../data/stampRequestsManager';
 import { AddPartnerModal } from './AddPartnerModal';
 import { MerchantQRSheet } from './MerchantQRSheet';
 import { LanguageSelector } from '../i18n/LanguageContext';
@@ -56,6 +60,7 @@ interface AdminDashboardProps {
     newCount: number;
     rewardUnlocked: boolean;
   };
+  onApproveStampToUser?: (userId: string, restaurantId: string) => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -64,9 +69,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onBackToApp,
   onLogoutAdmin,
   onSimulateScan,
+  onApproveStampToUser,
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'restaurants' | 'requests' | 'winners' | 'users'>('overview');
   const [requestsList, setRequestsList] = useState<StampRequest[]>(() => getStampRequests());
+  const [requestsFilter, setRequestsFilter] = useState<'all' | 'pending' | 'appealed' | 'accepted' | 'rejected'>('all');
   const [isAddPartnerOpen, setIsAddPartnerOpen] = useState(false);
   const [merchantStandOpen, setMerchantStandOpen] = useState(false);
   const [selectedRestForQR, setSelectedRestForQR] = useState<Restaurant | null>(null);
@@ -1007,28 +1014,89 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <span className="text-xs px-2 py-0.5 rounded-full bg-amber-400 text-black font-mono font-bold">
                     {requestsList.filter((r) => r.status === 'pending').length} Pending
                   </span>
+                  {requestsList.some((r) => r.status === 'appealed') && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500 text-white font-mono font-bold animate-pulse">
+                      {requestsList.filter((r) => r.status === 'appealed').length} طعون مستعجلة ⚖️
+                    </span>
+                  )}
                 </h3>
                 <p className="text-xs text-zinc-400 mt-0.5">
-                  مراقبة طلبات الأختام المرسلة من الزبائن لجميع محلات وكافيهات برج بوعريريج
+                  مراقبة طلبات الأختام المرسلة من الزبائن والفصل النهائي في طعون الرفض (إشراف AYMEN BG)
                 </p>
               </div>
 
+              <div className="flex items-center gap-2 self-start">
+                <button
+                  onClick={() => setRequestsList(getStampRequests())}
+                  className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-xs font-semibold text-zinc-300 hover:text-white flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-[#76FF03]" />
+                  <span>تحديث القائمة</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Filter Pills for Requests */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
               <button
-                onClick={() => setRequestsList(getStampRequests())}
-                className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-xs font-semibold text-zinc-300 hover:text-white flex items-center gap-1.5 self-start cursor-pointer"
+                onClick={() => setRequestsFilter('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  requestsFilter === 'all'
+                    ? 'bg-white text-black shadow-md'
+                    : 'bg-zinc-900 text-zinc-400 hover:text-white'
+                }`}
               >
-                <RefreshCw className="w-3.5 h-3.5 text-[#76FF03]" />
-                <span>تحديث القائمة</span>
+                الكل ({requestsList.length})
+              </button>
+              <button
+                onClick={() => setRequestsFilter('appealed')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  requestsFilter === 'appealed'
+                    ? 'bg-purple-500 text-white shadow-md'
+                    : 'bg-zinc-900 text-purple-300 hover:bg-zinc-800'
+                }`}
+              >
+                طعون الزبائن المستعجلة ⚖️ ({requestsList.filter((r) => r.status === 'appealed').length})
+              </button>
+              <button
+                onClick={() => setRequestsFilter('pending')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  requestsFilter === 'pending'
+                    ? 'bg-amber-400 text-black shadow-md'
+                    : 'bg-zinc-900 text-zinc-400 hover:text-white'
+                }`}
+              >
+                قيد الانتظار ({requestsList.filter((r) => r.status === 'pending').length})
+              </button>
+              <button
+                onClick={() => setRequestsFilter('accepted')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  requestsFilter === 'accepted'
+                    ? 'bg-[#76FF03] text-black shadow-md'
+                    : 'bg-zinc-900 text-zinc-400 hover:text-white'
+                }`}
+              >
+                المقبولة ({requestsList.filter((r) => r.status === 'accepted' || r.status === 'appeal_approved').length})
+              </button>
+              <button
+                onClick={() => setRequestsFilter('rejected')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  requestsFilter === 'rejected'
+                    ? 'bg-red-500 text-white shadow-md'
+                    : 'bg-zinc-900 text-zinc-400 hover:text-white'
+                }`}
+              >
+                المرفوضة ({requestsList.filter((r) => r.status === 'rejected' || r.status === 'appeal_rejected').length})
               </button>
             </div>
 
             <div className="bg-zinc-900/90 rounded-3xl border border-zinc-800 overflow-hidden shadow-xl">
-              {requestsList.length === 0 ? (
+              {requestsList.filter((r) => requestsFilter === 'all' || (requestsFilter === 'accepted' ? (r.status === 'accepted' || r.status === 'appeal_approved') : requestsFilter === 'rejected' ? (r.status === 'rejected' || r.status === 'appeal_rejected') : r.status === requestsFilter)).length === 0 ? (
                 <div className="py-12 px-6 text-center text-zinc-500">
                   <Clock className="w-12 h-12 mx-auto mb-3 opacity-30 text-[#76FF03]" />
-                  <div className="text-sm font-bold text-white">لا توجد طلبات أختام مسجلة حالياً</div>
+                  <div className="text-sm font-bold text-white">لا توجد طلبات أختام مطابقة لهذا الفلتر</div>
                   <div className="text-xs text-zinc-400 max-w-sm mx-auto mt-1">
-                    عندما يمسح أي زبون رمز الـ QR لأي محل في برج بوعريريج، سيظهر طلبه هنا فوراً.
+                    عندما يمسح أي زبون رمز الـ QR أو يقدم طعناً لرئيس الإدارة، سيظهر طلبه هنا فوراً.
                   </div>
                 </div>
               ) : (
@@ -1041,25 +1109,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <th className="py-3.5 px-5">Gmail</th>
                         <th className="py-3.5 px-5">Time</th>
                         <th className="py-3.5 px-5">Status</th>
-                        <th className="py-3.5 px-5 text-right">Admin Action</th>
+                        <th className="py-3.5 px-5 text-right">Admin Action (AYMEN BG)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800/60">
-                      {requestsList.map((req) => {
+                      {requestsList
+                        .filter((r) => requestsFilter === 'all' || (requestsFilter === 'accepted' ? (r.status === 'accepted' || r.status === 'appeal_approved') : requestsFilter === 'rejected' ? (r.status === 'rejected' || r.status === 'appeal_rejected') : r.status === requestsFilter))
+                        .map((req) => {
                         const isPending = req.status === 'pending';
+                        const isAppealed = req.status === 'appealed';
                         const isAccepted = req.status === 'accepted';
+                        const isAppealApproved = req.status === 'appeal_approved';
                         const isRejected = req.status === 'rejected';
+                        const isAppealRejected = req.status === 'appeal_rejected';
 
                         return (
-                          <tr key={req.id} className="hover:bg-zinc-850/50 transition-colors">
+                          <tr key={req.id} className={`hover:bg-zinc-850/50 transition-colors ${isAppealed ? 'bg-purple-950/20' : ''}`}>
                             <td className="py-3.5 px-5">
                               <div className="flex items-center gap-2">
                                 <span className="text-lg">{req.restaurantEmoji}</span>
                                 <span className="font-bold text-white">{req.restaurantName}</span>
                               </div>
                             </td>
-                            <td className="py-3.5 px-5 font-bold text-zinc-200">
-                              {req.userName}
+                            <td className="py-3.5 px-5">
+                              <div className="font-bold text-zinc-200">{req.userName}</div>
+                              {isAppealed && req.appealNote && (
+                                <div className="text-[10px] text-purple-300 mt-0.5 italic max-w-xs truncate" title={req.appealNote}>
+                                  طعن: "{req.appealNote}"
+                                </div>
+                              )}
                             </td>
                             <td className="py-3.5 px-5 font-mono text-[11px] text-zinc-400">
                               {req.userEmail}
@@ -1073,9 +1151,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   Pending 🕒
                                 </span>
                               )}
+                              {isAppealed && (
+                                <span className="px-2 py-0.5 rounded-full bg-purple-500/30 text-purple-300 font-bold border border-purple-500/60 text-[10px] animate-pulse">
+                                  طعن لدى AYMEN BG ⚖️
+                                </span>
+                              )}
                               {isAccepted && (
                                 <span className="px-2 py-0.5 rounded-full bg-[#76FF03]/20 text-[#76FF03] font-bold border border-[#76FF03]/40 text-[10px]">
                                   Accepted ✓
+                                </span>
+                              )}
+                              {isAppealApproved && (
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40 text-[10px]">
+                                  قبل الطعن (AYMEN BG) ✓
                                 </span>
                               )}
                               {isRejected && (
@@ -1083,13 +1171,53 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   Rejected ✕
                                 </span>
                               )}
+                              {isAppealRejected && (
+                                <span className="px-2 py-0.5 rounded-full bg-red-950 text-red-300 font-bold border border-red-800 text-[10px]">
+                                  رفض نهائي ✕
+                                </span>
+                              )}
                             </td>
                             <td className="py-3.5 px-5 text-right">
-                              {isPending ? (
+                              {isAppealed ? (
+                                <div className="flex flex-col items-end gap-1.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      onClick={() => {
+                                        resolveStampRequestAppeal(req.id, 'approved', 'تم قبول الطعن من قِبل رئيس الإدارة AYMEN BG.');
+                                        if (onApproveStampToUser) {
+                                          onApproveStampToUser(req.userId, req.restaurantId);
+                                        } else {
+                                          onSimulateScan(req.restaurantId);
+                                        }
+                                        setRequestsList(getStampRequests());
+                                        showToast(`🏛️ وافق AYMEN BG على طعن ${req.userName} واحتسب الختم`);
+                                      }}
+                                      className="px-2.5 py-1 rounded-lg bg-[#76FF03] hover:bg-[#8aff24] text-black font-black text-[11px] cursor-pointer shadow-sm"
+                                    >
+                                      قبول الطعن (+1)
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        resolveStampRequestAppeal(req.id, 'rejected', 'تم تثبيت قرار الرفض بعد المراجعة.');
+                                        setRequestsList(getStampRequests());
+                                        showToast(`تم تثبيت الرفض النهائي لطعن ${req.userName}`);
+                                      }}
+                                      className="px-2.5 py-1 rounded-lg bg-red-950 hover:bg-red-900 text-red-300 font-bold text-[11px] border border-red-800 cursor-pointer"
+                                    >
+                                      تثبيت الرفض
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : isPending ? (
                                 <div className="flex items-center justify-end gap-1.5">
                                   <button
                                     onClick={() => {
                                       updateStampRequestStatus(req.id, 'accepted');
+                                      if (onApproveStampToUser) {
+                                        onApproveStampToUser(req.userId, req.restaurantId);
+                                      } else {
+                                        onSimulateScan(req.restaurantId);
+                                      }
                                       setRequestsList(getStampRequests());
                                       showToast(`تم قبول الختم لـ ${req.userName}`);
                                     }}

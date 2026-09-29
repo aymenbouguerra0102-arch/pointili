@@ -116,6 +116,7 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<NavTab>('cards');
   const [cardForDetail, setCardForDetail] = useState<Restaurant | null>(null);
   const [scannedTargetRestaurant, setScannedTargetRestaurant] = useState<Restaurant | null>(null);
+  const [autoTriggerScannerVerify, setAutoTriggerScannerVerify] = useState<boolean>(false);
   const [cardForRedemption, setCardForRedemption] = useState<Restaurant | null>(null);
   const [merchantQROpen, setMerchantQROpen] = useState<boolean>(false);
   const [discoverModalOpen, setDiscoverModalOpen] = useState<boolean>(false);
@@ -391,6 +392,7 @@ export default function App() {
         onBackToApp={() => setMerchantSession(null)}
         onLogoutAdmin={handleMerchantLogout}
         onSimulateScan={(id) => handleAddStamp(id)}
+        onApproveStampToUser={handleApproveStampToUser}
       />
     );
   }
@@ -456,6 +458,8 @@ export default function App() {
               onAddStamp={(id) => handleAddStamp(id)}
               onNavigateToCards={() => setCurrentTab('cards')}
               preSelectedRestaurant={scannedTargetRestaurant || cardForDetail}
+              autoTriggerVerifyAndSend={autoTriggerScannerVerify}
+              onResetAutoTrigger={() => setAutoTriggerScannerVerify(false)}
             />
           )}
 
@@ -489,6 +493,12 @@ export default function App() {
           onClose={() => setCardForDetail(null)}
           onScanStamp={(r) => {
             setScannedTargetRestaurant(r);
+            setCardForDetail(null);
+            setCurrentTab('scanner');
+          }}
+          onVerifyAndSend={(r) => {
+            setScannedTargetRestaurant(r);
+            setAutoTriggerScannerVerify(true);
             setCardForDetail(null);
             setCurrentTab('scanner');
           }}

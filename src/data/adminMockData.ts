@@ -49,14 +49,14 @@ export function authenticateMerchantOrAdmin(
     };
   }
 
-  // 2. Merchant Store Authentication: Password for ALL stores is "1234"
-  if (trimmedPass === '1234') {
+  // 2. Merchant Store Authentication: Password for stores is "1234" (or store-assigned code)
+  if (trimmedPass === '1234' || trimmedPass.length >= 4) {
     const cleanInput = trimmedUser.toLowerCase();
 
     // Check if input matches one of the 10 official stores via qrStoreDirectory
     const qrInfoMatch = getStoreQRInfo(cleanInput);
 
-    // Match store by name (e.g. "Le Mirage", "El Bey", "Renaissance", "Express Mansoura"), Arabic name, or ID
+    // Match store by code, name, Arabic name, ID, or qrSecretCode
     const matched = restaurants.find((r) => {
       if (qrInfoMatch && getStoreQRInfo(r)?.key === qrInfoMatch.key) {
         return true;
@@ -66,19 +66,30 @@ export function authenticateMerchantOrAdmin(
       const nameAr = (r.nameAr || '').toLowerCase();
       const nameFr = (r.nameFr || '').toLowerCase();
       const id = r.id.toLowerCase();
+      const secret = (r.qrSecretCode || '').toLowerCase();
 
       return (
         name === cleanInput ||
         nameAr === cleanInput ||
         nameFr === cleanInput ||
         id === cleanInput ||
+        secret === cleanInput ||
         id.replace('bba_', '') === cleanInput.replace('bba_', '') ||
         name.includes(cleanInput) ||
-        cleanInput.includes(name)
+        cleanInput.includes(name) ||
+        cleanInput.includes(id.replace('bba_', ''))
       );
     });
 
     if (matched) {
+      // Validate password if not default 1234
+      if (trimmedPass !== '1234' && trimmedPass.toLowerCase() !== (matched.qrSecretCode || '').toLowerCase()) {
+        return {
+          success: false,
+          error: 'كلمة المرور غير صحيحة. كلمة المرور الافتراضية للمراجعة هي (1234).',
+        };
+      }
+
       return {
         success: true,
         role: 'merchant',
@@ -87,7 +98,7 @@ export function authenticateMerchantOrAdmin(
     } else {
       return {
         success: false,
-        error: `لم يتم العثور على متجر باسم "${trimmedUser}". يرجى كتابة اسم المحل المسجل (مثل: Le Mirage، El Bey، Burger HOUSE 34).`,
+        error: `لم يتم العثور على متجر بالكود أو الاسم "${trimmedUser}". يرجى كتابة كود المحل المعطى لك بدقة.`,
       };
     }
   }
@@ -102,7 +113,7 @@ export function authenticateMerchantOrAdmin(
 
   return {
     success: false,
-    error: 'كلمة المرور غير صحيحة. كلمة مرور أصحاب المحلات الموحدة هي "1234".',
+    error: 'رمز المرور غير صحيح. يرجى إدخال الكود المخصص لمتجرك بدقة.',
   };
 }
 

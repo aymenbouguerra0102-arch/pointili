@@ -92,8 +92,11 @@ export const MerchantQRSheet: React.FC<MerchantQRSheetProps> = ({
               </span>
             </div>
 
-            <div className="text-xs font-black uppercase tracking-wider mb-2.5">
-              امسح الكود لربح ختم الولاء ⚡
+            <div className="text-xs font-black uppercase tracking-wider mb-2 flex items-center justify-center gap-2">
+              <span>امسح الكود لربح ختم الولاء ⚡</span>
+              <span className="px-2 py-0.5 rounded-full bg-black text-[#76FF03] text-[10px] font-black tracking-wider">
+                SCAN ME
+              </span>
             </div>
 
             {/* REAL STATIC QR CODE IMAGE FROM /qr-codes */}

@@ -95,10 +95,17 @@ export interface StampRequest {
   userAvatar: string;
   timestamp: string;
   createdAt: number;
-  status: 'pending' | 'accepted' | 'rejected';
+  status: 'pending' | 'accepted' | 'rejected' | 'appealed' | 'appeal_approved' | 'appeal_rejected';
   resolvedAt?: string;
   currentStampsBefore: number;
   newStampsAfter?: number;
+  // Appeal system fields
+  appealNote?: string;
+  appealedAt?: string;
+  appealVerdict?: 'approved' | 'rejected';
+  appealResolvedBy?: string;
+  appealResolvedAt?: string;
+  appealVerdictNote?: string;
 }
 
 export interface MerchantSession {

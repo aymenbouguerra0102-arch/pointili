@@ -14,6 +14,8 @@ import {
   ShieldAlert,
   ShieldCheck,
   Download,
+  Send,
+  Camera,
 } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { getStoreQRInfo } from '../data/qrStoreDirectory';
@@ -22,6 +24,7 @@ interface CardDetailModalProps {
   restaurant: Restaurant | null;
   onClose: () => void;
   onScanStamp: (restaurant: Restaurant) => void;
+  onVerifyAndSend?: (restaurant: Restaurant, payload?: string) => void;
   onRedeemReward: (restaurant: Restaurant) => void;
   onDirectAddStamp: (restaurantId: string) => void;
 }
@@ -30,6 +33,7 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({
   restaurant,
   onClose,
   onScanStamp,
+  onVerifyAndSend,
   onRedeemReward,
 }) => {
   const { t, language } = useLanguage();
@@ -146,13 +150,15 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({
           {qrInfo ? (
             /* ACTIVE QR CODE FOR ONE OF THE 10 REGISTERED STORES */
             <div className="p-4 rounded-2xl bg-zinc-900 border border-[#76FF03]/30 text-center relative overflow-hidden">
+              {/* QR Header with SCAN ME Badge */}
               <div className="flex items-center justify-between text-[11px] font-bold text-[#76FF03] mb-2.5">
                 <span className="flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 text-[#76FF03]" />
-                  <span>رمز QR المعتمد للمحل (جاهز للمسح)</span>
+                  <span>رمز QR المعتمد للمحل</span>
                 </span>
-                <span className="font-mono text-[10px] bg-[#76FF03]/10 px-2 py-0.5 rounded-full border border-[#76FF03]/30">
-                  كود رسمي
+                <span className="font-black text-[11px] bg-[#76FF03] text-black px-2.5 py-0.5 rounded-full shadow-sm tracking-wider uppercase flex items-center gap-1">
+                  <QrCode className="w-3 h-3 stroke-[2.5]" />
+                  <span>SCAN ME</span>
                 </span>
               </div>
 
@@ -174,17 +180,36 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({
               <div className="mt-2.5 text-xs font-bold text-white">
                 {qrInfo.name}
               </div>
-              <div className="text-[11px] text-zinc-400 font-mono mt-0.5">
+              <div className="text-[11px] text-zinc-400 font-mono mt-0.5" dir="ltr">
                 {qrInfo.payload}
               </div>
 
-              <div className="mt-3 flex gap-2">
+              {/* ACTION BUTTONS: تحقق وأرسل + مسح بالكاميرا */}
+              <div className="mt-3.5 flex gap-2">
                 <button
-                  onClick={() => onScanStamp(restaurant)}
-                  className="flex-1 py-2 px-3 rounded-xl bg-[#76FF03] hover:bg-[#8aff24] text-black font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-[#76FF03]/20 cursor-pointer"
+                  type="button"
+                  onClick={() => {
+                    if (onVerifyAndSend) {
+                      onVerifyAndSend(restaurant, qrInfo.payload);
+                    } else {
+                      onScanStamp(restaurant);
+                    }
+                  }}
+                  className="flex-1 py-2.5 px-3.5 rounded-xl bg-[#76FF03] hover:bg-[#8aff24] active:scale-95 text-black font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-lg shadow-[#76FF03]/25 cursor-pointer transition-all border border-[#76FF03]"
+                  title="التحقق من صحة الكود وإرسال طلب الختم مباشرة للمحل"
                 >
-                  <QrCode className="w-3.5 h-3.5" />
-                  <span>مسح هذا الكود الآن</span>
+                  <Send className="w-4 h-4 stroke-[2.5]" />
+                  <span>تحقق وأرسل</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onScanStamp(restaurant)}
+                  className="py-2.5 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs flex items-center justify-center gap-1.5 border border-zinc-700 active:scale-95 transition-all cursor-pointer shrink-0"
+                  title="فتح كاميرا المسح التلقائي"
+                >
+                  <Camera className="w-3.5 h-3.5 text-[#76FF03]" />
+                  <span>مسح بالكاميرا</span>
                 </button>
               </div>
             </div>
