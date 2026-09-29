@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Restaurant, UserProfile, StampHistoryItem } from './types';
+import { Restaurant, UserProfile, StampHistoryItem, MerchantSession } from './types';
 import {
   INITIAL_RESTAURANTS,
   DISCOVERABLE_RESTAURANTS,
@@ -21,13 +21,14 @@ import { MerchantQRSheet } from './components/MerchantQRSheet';
 import { DiscoverModal } from './components/DiscoverModal';
 import { AdminLogin } from './components/AdminLogin';
 import { AdminDashboard } from './components/AdminDashboard';
+import { MerchantDashboard } from './components/MerchantDashboard';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
 import confetti from 'canvas-confetti';
 
 const STORAGE_KEY_AUTH = 'pointili_auth_user_v1';
 const STORAGE_KEY_BBA_RESTAURANTS = 'pointili_bba_restaurants_v5';
 const STORAGE_KEY_HISTORY = 'pointili_history_v2';
-const STORAGE_KEY_ADMIN = 'pointili_admin_logged_in_v1';
+const STORAGE_KEY_MERCHANT_SESSION = 'pointili_merchant_session_v2';
 
 // Helper to store/load user-specific stamps so new users start strictly with 0 stamps
 function getUserStampsMap(userId: string): Record<string, number> {
@@ -48,13 +49,13 @@ function saveUserStampsMap(userId: string, map: Record<string, number>) {
 }
 
 export default function App() {
-  // Admin State (Secured in ephemeral sessionStorage)
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
+  // Merchant / Super Admin Session (Secured in ephemeral sessionStorage)
+  const [merchantSession, setMerchantSession] = useState<MerchantSession | null>(() => {
     try {
-      return sessionStorage.getItem(STORAGE_KEY_ADMIN) === 'true';
-    } catch {
-      return false;
-    }
+      const saved = sessionStorage.getItem(STORAGE_KEY_MERCHANT_SESSION);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return null;
   });
   const [showAdminLogin, setShowAdminLogin] = useState<boolean>(false);
 
@@ -141,13 +142,12 @@ export default function App() {
   }, [history]);
 
   useEffect(() => {
-    if (isAdminLoggedIn) {
-      sessionStorage.setItem(STORAGE_KEY_ADMIN, 'true');
+    if (merchantSession) {
+      sessionStorage.setItem(STORAGE_KEY_MERCHANT_SESSION, JSON.stringify(merchantSession));
     } else {
-      sessionStorage.removeItem(STORAGE_KEY_ADMIN);
-      localStorage.removeItem(STORAGE_KEY_ADMIN);
+      sessionStorage.removeItem(STORAGE_KEY_MERCHANT_SESSION);
     }
-  }, [isAdminLoggedIn]);
+  }, [merchantSession]);
 
   // Auth Handlers
   const handleLogin = (user: UserProfile) => {
@@ -172,14 +172,40 @@ export default function App() {
     setRestaurants(INITIAL_RESTAURANTS.map((r) => ({ ...r, stampsCount: 0 })));
   };
 
-  // Admin Handlers
-  const handleAdminLoginSuccess = () => {
-    setIsAdminLoggedIn(true);
+  // Merchant / Admin Login Handlers
+  const handleMerchantLoginSuccess = (session: MerchantSession) => {
+    setMerchantSession(session);
     setShowAdminLogin(false);
   };
 
-  const handleAdminLogout = () => {
-    setIsAdminLoggedIn(false);
+  const handleMerchantLogout = () => {
+    setMerchantSession(null);
+  };
+
+  // Live approval handler when merchant clicks Accept on their dashboard
+  const handleApproveStampToUser = (userId: string, restaurantId: string) => {
+    const userStamps = getUserStampsMap(userId);
+    const current = typeof userStamps[restaurantId] === 'number' ? userStamps[restaurantId] : 0;
+    const next = Math.min(6, current + 1);
+    userStamps[restaurantId] = next;
+    saveUserStampsMap(userId, userStamps);
+
+    // If active customer in this window is target user, increment their card
+    if (currentUser && currentUser.id === userId) {
+      setRestaurants((prev) =>
+        prev.map((r) => (r.id === restaurantId ? { ...r, stampsCount: next } : r))
+      );
+    }
+
+    const target = restaurants.find((r) => r.id === restaurantId);
+    if (target) {
+      recordRealScanLog({
+        restaurantId: target.id,
+        restaurantName: target.nameAr || target.name,
+        userId,
+        userName: 'زبون معتمد',
+      });
+    }
   };
 
   // Add Partner Restaurant (from Admin Panel)
@@ -340,30 +366,46 @@ export default function App() {
     setHistory([]);
   };
 
-  // 1. IF ADMIN LOGGED IN, RENDER ADMIN CONTROL PANEL
-  if (isAdminLoggedIn) {
+  // 1. IF MERCHANT STORE OWNER LOGGED IN
+  if (merchantSession && merchantSession.role === 'merchant' && merchantSession.restaurant) {
+    return (
+      <MerchantDashboard
+        restaurant={merchantSession.restaurant}
+        onLogout={handleMerchantLogout}
+        onOpenQRStand={(r) => {
+          setCardForDetail(r);
+          setMerchantQROpen(true);
+        }}
+        onApproveStampToUser={handleApproveStampToUser}
+      />
+    );
+  }
+
+  // 2. IF SUPER ADMIN LOGGED IN ("AYMEN BG")
+  if (merchantSession && merchantSession.role === 'super_admin') {
     return (
       <AdminDashboard
         restaurants={restaurants}
         onAddRestaurant={handleAddRestaurant}
-        onBackToApp={() => setIsAdminLoggedIn(false)}
-        onLogoutAdmin={handleAdminLogout}
+        onBackToApp={() => setMerchantSession(null)}
+        onLogoutAdmin={handleMerchantLogout}
         onSimulateScan={(id) => handleAddStamp(id)}
       />
     );
   }
 
-  // 2. IF ADMIN LOGIN MODAL IS REQUESTED, SHOW ADMIN LOGIN
+  // 3. IF MERCHANT / ADMIN LOGIN MODAL IS REQUESTED
   if (showAdminLogin) {
     return (
       <AdminLogin
-        onSuccess={handleAdminLoginSuccess}
+        restaurants={restaurants}
+        onSuccess={handleMerchantLoginSuccess}
         onCancel={() => setShowAdminLogin(false)}
       />
     );
   }
 
-  // 3. IF CUSTOMER NOT AUTHENTICATED, RENDER GOOGLE LOGIN SCREEN
+  // 4. IF CUSTOMER NOT AUTHENTICATED, RENDER GOOGLE LOGIN SCREEN
   if (!currentUser) {
     return (
       <AuthScreen
@@ -376,7 +418,7 @@ export default function App() {
   // Unlocked rewards count for bottom badge
   const unlockedRewardsCount = restaurants.filter((r) => r.stampsCount >= 6).length;
 
-  // 4. MAIN CUSTOMER PORTAL
+  // 5. MAIN CUSTOMER PORTAL
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-between select-none">
       <div className="w-full max-w-md min-h-screen bg-zinc-950 flex flex-col relative shadow-2xl shadow-black border-x border-zinc-900/60">
@@ -408,6 +450,7 @@ export default function App() {
           {currentTab === 'scanner' && (
             <QRScannerTab
               restaurants={restaurants}
+              currentUser={currentUser}
               onAddStamp={(id) => handleAddStamp(id)}
               onNavigateToCards={() => setCurrentTab('cards')}
               preSelectedRestaurant={cardForDetail}
@@ -463,6 +506,7 @@ export default function App() {
           restaurants={restaurants}
           isOpen={merchantQROpen}
           onClose={() => setMerchantQROpen(false)}
+          initialRestaurantId={cardForDetail?.id}
           onSimulateCustomerScan={(id) => {
             handleAddStamp(id);
             setCurrentTab('scanner');

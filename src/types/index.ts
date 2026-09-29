@@ -83,3 +83,29 @@ export interface WinnerLogItem {
   code: string;
   status: 'claimed' | 'unlocked';
 }
+
+export interface StampRequest {
+  id: string;
+  restaurantId: string;
+  restaurantName: string;
+  restaurantEmoji: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  userAvatar: string;
+  timestamp: string;
+  createdAt: number;
+  status: 'pending' | 'accepted' | 'rejected';
+  resolvedAt?: string;
+  currentStampsBefore: number;
+  newStampsAfter?: number;
+}
+
+export interface MerchantSession {
+  role: 'merchant' | 'super_admin';
+  restaurantId?: string;
+  restaurantName?: string;
+  restaurant?: Restaurant;
+  username: string;
+  loginTime: string;
+}

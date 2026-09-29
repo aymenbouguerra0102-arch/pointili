@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Restaurant, UserProfile, DailyActivityPoint, WinnerLogItem } from '../types';
+import { Restaurant, UserProfile, DailyActivityPoint, WinnerLogItem, StampRequest } from '../types';
 import { PointiliLogo } from './PointiliLogo';
 import {
   Users,
@@ -27,6 +27,7 @@ import {
   Utensils,
   Coffee,
   Filter,
+  XCircle,
 } from 'lucide-react';
 import {
   getRegisteredUsers,
@@ -39,6 +40,7 @@ import {
   clearAllRealLogs,
   RealScanLogEvent,
 } from '../data/adminMockData';
+import { getStampRequests, updateStampRequestStatus } from '../data/stampRequestsManager';
 import { AddPartnerModal } from './AddPartnerModal';
 import { MerchantQRSheet } from './MerchantQRSheet';
 import { LanguageSelector } from '../i18n/LanguageContext';
@@ -63,7 +65,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onLogoutAdmin,
   onSimulateScan,
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'restaurants' | 'winners' | 'users'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'restaurants' | 'requests' | 'winners' | 'users'>('overview');
+  const [requestsList, setRequestsList] = useState<StampRequest[]>(() => getStampRequests());
   const [isAddPartnerOpen, setIsAddPartnerOpen] = useState(false);
   const [merchantStandOpen, setMerchantStandOpen] = useState(false);
   const [selectedRestForQR, setSelectedRestForQR] = useState<Restaurant | null>(null);
@@ -277,6 +280,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             >
               <Store className="w-4 h-4" />
               <span>BBA Venues & QR ({restaurants.length})</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setRequestsList(getStampRequests());
+                setActiveTab('requests');
+              }}
+              className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
+                activeTab === 'requests'
+                  ? 'bg-[#76FF03] text-black shadow-md shadow-[#76FF03]/20'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Clock className="w-4 h-4" />
+              <span>Live Stamp Requests ({requestsList.filter(r => r.status === 'pending').length} Pending)</span>
             </button>
 
             <button
@@ -969,6 +987,136 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           </td>
                         </tr>
                       ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================
+            TAB: LIVE STAMP REQUESTS QUEUE (مراقبة طلبات الأختام الحية)
+        ======================================================== */}
+        {activeTab === 'requests' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-extrabold text-white flex items-center gap-2">
+                  <span>Live Stamp Requests Queue</span>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-amber-400 text-black font-mono font-bold">
+                    {requestsList.filter((r) => r.status === 'pending').length} Pending
+                  </span>
+                </h3>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  مراقبة طلبات الأختام المرسلة من الزبائن لجميع محلات وكافيهات برج بوعريريج
+                </p>
+              </div>
+
+              <button
+                onClick={() => setRequestsList(getStampRequests())}
+                className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-xs font-semibold text-zinc-300 hover:text-white flex items-center gap-1.5 self-start cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-[#76FF03]" />
+                <span>تحديث القائمة</span>
+              </button>
+            </div>
+
+            <div className="bg-zinc-900/90 rounded-3xl border border-zinc-800 overflow-hidden shadow-xl">
+              {requestsList.length === 0 ? (
+                <div className="py-12 px-6 text-center text-zinc-500">
+                  <Clock className="w-12 h-12 mx-auto mb-3 opacity-30 text-[#76FF03]" />
+                  <div className="text-sm font-bold text-white">لا توجد طلبات أختام مسجلة حالياً</div>
+                  <div className="text-xs text-zinc-400 max-w-sm mx-auto mt-1">
+                    عندما يمسح أي زبون رمز الـ QR لأي محل في برج بوعريريج، سيظهر طلبه هنا فوراً.
+                  </div>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-zinc-950/80 text-zinc-400 border-b border-zinc-800 uppercase tracking-wider text-[10px]">
+                      <tr>
+                        <th className="py-3.5 px-5">Venue</th>
+                        <th className="py-3.5 px-5">Customer</th>
+                        <th className="py-3.5 px-5">Gmail</th>
+                        <th className="py-3.5 px-5">Time</th>
+                        <th className="py-3.5 px-5">Status</th>
+                        <th className="py-3.5 px-5 text-right">Admin Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800/60">
+                      {requestsList.map((req) => {
+                        const isPending = req.status === 'pending';
+                        const isAccepted = req.status === 'accepted';
+                        const isRejected = req.status === 'rejected';
+
+                        return (
+                          <tr key={req.id} className="hover:bg-zinc-850/50 transition-colors">
+                            <td className="py-3.5 px-5">
+                              <div className="flex items-center gap-2">
+                                <span className="text-lg">{req.restaurantEmoji}</span>
+                                <span className="font-bold text-white">{req.restaurantName}</span>
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-5 font-bold text-zinc-200">
+                              {req.userName}
+                            </td>
+                            <td className="py-3.5 px-5 font-mono text-[11px] text-zinc-400">
+                              {req.userEmail}
+                            </td>
+                            <td className="py-3.5 px-5 text-zinc-400 font-mono text-[11px]">
+                              {req.timestamp}
+                            </td>
+                            <td className="py-3.5 px-5">
+                              {isPending && (
+                                <span className="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 font-bold border border-amber-400/40 text-[10px]">
+                                  Pending 🕒
+                                </span>
+                              )}
+                              {isAccepted && (
+                                <span className="px-2 py-0.5 rounded-full bg-[#76FF03]/20 text-[#76FF03] font-bold border border-[#76FF03]/40 text-[10px]">
+                                  Accepted ✓
+                                </span>
+                              )}
+                              {isRejected && (
+                                <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-bold border border-red-500/40 text-[10px]">
+                                  Rejected ✕
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-5 text-right">
+                              {isPending ? (
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    onClick={() => {
+                                      updateStampRequestStatus(req.id, 'accepted');
+                                      setRequestsList(getStampRequests());
+                                      showToast(`تم قبول الختم لـ ${req.userName}`);
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg bg-[#76FF03] hover:bg-[#8aff24] text-black font-extrabold text-[11px] cursor-pointer"
+                                  >
+                                    Accept
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      updateStampRequestStatus(req.id, 'rejected');
+                                      setRequestsList(getStampRequests());
+                                      showToast(`تم رفض الختم لـ ${req.userName}`);
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg bg-red-950 hover:bg-red-900 text-red-300 font-bold text-[11px] border border-red-800 cursor-pointer"
+                                  >
+                                    Reject
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-[11px] text-zinc-500">
+                                  {req.resolvedAt ? `Processed at ${req.resolvedAt}` : 'Resolved'}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

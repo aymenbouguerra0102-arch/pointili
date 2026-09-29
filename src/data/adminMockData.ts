@@ -25,6 +25,79 @@ export async function verifyAdminCredentials(usernameInput: string, passwordInpu
   );
 }
 
+export interface AuthMerchantAdminResult {
+  success: boolean;
+  role?: 'super_admin' | 'merchant';
+  restaurant?: Restaurant;
+  error?: string;
+}
+
+export function authenticateMerchantOrAdmin(
+  usernameInput: string,
+  passwordInput: string,
+  restaurants: Restaurant[]
+): AuthMerchantAdminResult {
+  const trimmedUser = usernameInput.trim();
+  const trimmedPass = passwordInput.trim();
+
+  // 1. Super Admin Authentication: "AYMEN BG" & "14072003"
+  if (trimmedUser.toUpperCase() === 'AYMEN BG' && trimmedPass === '14072003') {
+    return {
+      success: true,
+      role: 'super_admin',
+    };
+  }
+
+  // 2. Merchant Store Authentication: Password for ALL stores is "1234"
+  if (trimmedPass === '1234') {
+    const cleanInput = trimmedUser.toLowerCase();
+
+    // Match store by name (e.g. "Le Mirage", "El Bey", "Renaissance", "Express Mansoura"), Arabic name, or ID
+    const matched = restaurants.find((r) => {
+      const name = r.name.toLowerCase();
+      const nameAr = (r.nameAr || '').toLowerCase();
+      const nameFr = (r.nameFr || '').toLowerCase();
+      const id = r.id.toLowerCase();
+
+      return (
+        name === cleanInput ||
+        nameAr === cleanInput ||
+        nameFr === cleanInput ||
+        id === cleanInput ||
+        id.replace('bba_', '') === cleanInput.replace('bba_', '') ||
+        name.includes(cleanInput) ||
+        cleanInput.includes(name)
+      );
+    });
+
+    if (matched) {
+      return {
+        success: true,
+        role: 'merchant',
+        restaurant: matched,
+      };
+    } else {
+      return {
+        success: false,
+        error: `لم يتم العثور على متجر باسم "${trimmedUser}". يرجى كتابة اسم المحل المسجل (مثل: Le Mirage، El Bey، Burger HOUSE 34).`,
+      };
+    }
+  }
+
+  // Failed password check
+  if (trimmedUser.toUpperCase() === 'AYMEN BG') {
+    return {
+      success: false,
+      error: 'كلمة مرور المشرف العام غير صحيحة.',
+    };
+  }
+
+  return {
+    success: false,
+    error: 'كلمة المرور غير صحيحة. كلمة مرور أصحاب المحلات الموحدة هي "1234".',
+  };
+}
+
 // -------------------------------------------------------------
 // REAL PERSISTENT ACTIVITY & STATS ENGINE
 // -------------------------------------------------------------

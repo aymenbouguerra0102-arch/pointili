@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Restaurant } from '../types';
+import { Restaurant, UserProfile, StampRequest } from '../types';
 import {
   Flashlight,
   Sparkles,
@@ -13,14 +13,23 @@ import {
   X,
   ChevronDown,
   ChevronUp,
+  Clock,
+  ShieldCheck,
+  Store,
+  Check,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import jsQR from 'jsqr';
 import { Html5Qrcode } from 'html5-qrcode';
 import { useLanguage } from '../i18n/LanguageContext';
+import {
+  createStampRequest,
+  getStampRequests,
+} from '../data/stampRequestsManager';
 
 interface QRScannerTabProps {
   restaurants: Restaurant[];
+  currentUser?: UserProfile | null;
   onAddStamp: (restaurantId: string) => {
     success: boolean;
     restaurant?: Restaurant;
@@ -65,6 +74,7 @@ function playScanChime() {
 
 export const QRScannerTab: React.FC<QRScannerTabProps> = ({
   restaurants,
+  currentUser,
   onAddStamp,
   onNavigateToCards,
 }) => {
@@ -75,7 +85,6 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
   const [cameraActive, setCameraActive] = useState<boolean>(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [torchOn, setTorchOn] = useState<boolean>(false);
-  const [torchSupported, setTorchSupported] = useState<boolean>(false);
 
   // Manual fallback toggle
   const [showManualInput, setShowManualInput] = useState<boolean>(false);
@@ -85,14 +94,10 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
   // Unrecognized QR warning
   const [unrecognizedCode, setUnrecognizedCode] = useState<string | null>(null);
 
-  // Success Notification & Auto-redirect State
-  const [scanResult, setScanResult] = useState<{
-    success: boolean;
-    restaurant: Restaurant;
-    newCount: number;
-    rewardUnlocked: boolean;
-    message: string;
-  } | null>(null);
+  // ANTI-FRAUD PENDING REQUEST STATE
+  const [activeRequest, setActiveRequest] = useState<StampRequest | null>(null);
+  const [requestResolvedState, setRequestResolvedState] = useState<'pending' | 'accepted' | 'rejected'>('pending');
+  const [newStampCount, setNewStampCount] = useState<number>(0);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -100,7 +105,6 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
   const animFrameIdRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const lastScanTimestampRef = useRef<number>(0);
-  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isHandlingScanRef = useRef<boolean>(false);
 
   // Parse raw QR code string to find matching BBA restaurant
@@ -197,64 +201,80 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
     setTorchOn(false);
   }, []);
 
-  // Execute authentic stamp addition and auto-redirect back to main dashboard
-  const handleExecuteValidScan = useCallback(
+  // Requirement 2: Generates a Pending Stamp Request (Anti-Fraud)
+  const handleInitiateStampRequest = useCallback(
     (target: Restaurant) => {
       if (isHandlingScanRef.current) return;
       isHandlingScanRef.current = true;
 
       playScanChime();
-      navigator.vibrate?.([100, 50, 100]);
+      navigator.vibrate?.([80, 50, 80]);
 
-      const res = onAddStamp(target.id);
-      if (res.success && res.restaurant) {
-        if (res.rewardUnlocked) {
-          confetti({
-            particleCount: 120,
-            spread: 90,
-            origin: { y: 0.55 },
-            colors: ['#76FF03', '#FFFFFF', '#00E5FF', '#FFD600'],
-          });
-        } else {
-          confetti({
-            particleCount: 50,
-            spread: 60,
-            origin: { y: 0.65 },
-            colors: ['#76FF03', '#FFFFFF'],
-          });
-        }
+      // Create secure pending request
+      const req = createStampRequest({
+        restaurant: target,
+        userId: currentUser?.id || 'usr_anonymous',
+        userEmail: currentUser?.email || 'customer@gmail.com',
+        userName: currentUser?.name || 'زبون Pointili',
+        userAvatar:
+          currentUser?.avatarUrl ||
+          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
+      });
 
-        const restName =
-          language === 'ar'
-            ? res.restaurant.nameAr || res.restaurant.name
-            : language === 'fr'
-            ? res.restaurant.nameFr || res.restaurant.name
-            : res.restaurant.nameEn || res.restaurant.name;
-
-        setScanResult({
-          success: true,
-          restaurant: res.restaurant,
-          newCount: res.newCount,
-          rewardUnlocked: res.rewardUnlocked,
-          message: res.rewardUnlocked
-            ? t.rewardUnlockedCelebration
-            : `${t.stampSuccess} (${restName})`,
-        });
-
-        // Pause camera on successful detection
-        stopCamera();
-        setManualCodeError(null);
-        setUnrecognizedCode(null);
-
-        // Auto-redirect to Main Dashboard after 1.6s visual celebration
-        if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
-        redirectTimerRef.current = setTimeout(() => {
-          onNavigateToCards();
-        }, 1600);
-      }
+      setActiveRequest(req);
+      setRequestResolvedState('pending');
+      stopCamera();
     },
-    [language, onAddStamp, onNavigateToCards, stopCamera, t]
+    [currentUser, stopCamera]
   );
+
+  // Live polling & event listener for merchant's Accept/Reject action
+  useEffect(() => {
+    if (!activeRequest) return;
+
+    const checkRequestStatus = () => {
+      const all = getStampRequests();
+      const current = all.find((r) => r.id === activeRequest.id);
+
+      if (current && current.status !== 'pending') {
+        if (current.status === 'accepted' && requestResolvedState === 'pending') {
+          // Merchant approved! Actually add stamp to card
+          setRequestResolvedState('accepted');
+          const result = onAddStamp(current.restaurantId);
+          setNewStampCount(result.newCount);
+
+          playScanChime();
+          navigator.vibrate?.([100, 50, 100]);
+
+          confetti({
+            particleCount: 100,
+            spread: 80,
+            origin: { y: 0.6 },
+            colors: ['#76FF03', '#FFFFFF', '#00E5FF'],
+          });
+
+          // Auto-redirect to dashboard after celebration
+          setTimeout(() => {
+            onNavigateToCards();
+          }, 2200);
+        } else if (current.status === 'rejected' && requestResolvedState === 'pending') {
+          setRequestResolvedState('rejected');
+          navigator.vibrate?.([200, 100, 200]);
+        }
+      }
+    };
+
+    const interval = setInterval(checkRequestStatus, 700);
+    const handleStorage = () => checkRequestStatus();
+    window.addEventListener('pointili_stamp_requests_changed', handleStorage);
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('pointili_stamp_requests_changed', handleStorage);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [activeRequest, onAddStamp, onNavigateToCards, requestResolvedState]);
 
   // Zero-lag real-time frame scanning loop
   const tickScan = useCallback(() => {
@@ -268,7 +288,6 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
     const video = videoRef.current;
     if (video.readyState === video.HAVE_ENOUGH_DATA) {
       const now = Date.now();
-      // Scan every ~90ms for instant, zero-lag detection
       if (now - lastScanTimestampRef.current > 90) {
         lastScanTimestampRef.current = now;
 
@@ -289,7 +308,7 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
             if (code && code.data) {
               const matched = findMatchingRestaurant(code.data);
               if (matched) {
-                handleExecuteValidScan(matched);
+                handleInitiateStampRequest(matched);
                 return;
               } else {
                 setUnrecognizedCode(code.data);
@@ -303,7 +322,7 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
     if (!isHandlingScanRef.current) {
       animFrameIdRef.current = requestAnimationFrame(tickScan);
     }
-  }, [findMatchingRestaurant, handleExecuteValidScan]);
+  }, [findMatchingRestaurant, handleInitiateStampRequest]);
 
   // Requirement 1: Direct Camera Access on Mount
   const startCamera = async () => {
@@ -327,7 +346,6 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
         return;
       }
 
-      // Immediately activate the rear-facing camera (facingMode: "environment")
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: 'environment' },
@@ -338,13 +356,6 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
 
       streamRef.current = stream;
 
-      // Check for torch capability on the video track
-      const track = stream.getVideoTracks()[0];
-      if (track) {
-        const caps = (track.getCapabilities?.() || {}) as any;
-        setTorchSupported(Boolean(caps.torch));
-      }
-
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.setAttribute('playsinline', 'true');
@@ -354,7 +365,6 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
       setCameraActive(true);
       setIsInitializing(false);
 
-      // Start the zero-lag frame analyzer
       animFrameIdRef.current = requestAnimationFrame(tickScan);
     } catch (err: any) {
       console.warn('Direct camera start notice:', err);
@@ -377,17 +387,15 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
     }
   };
 
-  // Direct activation on component mount
   useEffect(() => {
     startCamera();
 
     return () => {
       stopCamera();
-      if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
     };
   }, []);
 
-  // Flashlight toggle using track constraints
+  // Flashlight toggle
   const toggleTorch = async () => {
     if (streamRef.current) {
       const track = streamRef.current.getVideoTracks()[0];
@@ -405,13 +413,12 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
     }
   };
 
-  // Gallery / Storage image upload using html5-qrcode file scanner
+  // Gallery image file upload
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     try {
-      // 1. Try with Html5Qrcode.scanFile
       const html5QrCode = new Html5Qrcode('qr-temp-file-reader');
       const decodedResult = await html5QrCode.scanFile(file, false);
       html5QrCode.clear();
@@ -419,7 +426,7 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
       if (decodedResult) {
         const matched = findMatchingRestaurant(decodedResult);
         if (matched) {
-          handleExecuteValidScan(matched);
+          handleInitiateStampRequest(matched);
           return;
         } else {
           setUnrecognizedCode(decodedResult);
@@ -427,7 +434,6 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
         }
       }
     } catch {
-      // 2. Fallback to jsQR image canvas decode
       const reader = new FileReader();
       reader.onload = (event) => {
         const img = new Image();
@@ -446,15 +452,15 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
             if (code && code.data) {
               const matched = findMatchingRestaurant(code.data);
               if (matched) {
-                handleExecuteValidScan(matched);
+                handleInitiateStampRequest(matched);
               } else {
                 setUnrecognizedCode(code.data);
               }
             } else {
               alert(
                 language === 'ar'
-                  ? 'لم يتم العثور على كود QR واضح في هذه الصورة. يرجى تجربة صورة أوضح أو توجيه الكاميرا.'
-                  : 'No valid QR code found in this photo. Please try a clearer picture.'
+                  ? 'لم يتم العثور على كود QR واضح في هذه الصورة.'
+                  : 'No valid QR code found in this photo.'
               );
             }
           }
@@ -483,7 +489,7 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
 
     const matched = findMatchingRestaurant(input);
     if (matched) {
-      handleExecuteValidScan(matched);
+      handleInitiateStampRequest(matched);
       setManualCodeInput('');
     } else {
       setManualCodeError(
@@ -494,15 +500,18 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
     }
   };
 
+  const handleDismissPending = () => {
+    setActiveRequest(null);
+    setRequestResolvedState('pending');
+    isHandlingScanRef.current = false;
+    startCamera();
+  };
+
   return (
     <div className="relative w-full min-h-[85vh] flex flex-col font-['Plus_Jakarta_Sans'] select-none bg-black text-white overflow-hidden pb-20">
-      {/* Hidden processing canvas */}
       <canvas ref={canvasRef} className="hidden" />
-
-      {/* Hidden DOM container for html5-qrcode file scanning */}
       <div id="qr-temp-file-reader" className="hidden" />
 
-      {/* Hidden file input for gallery picking */}
       <input
         ref={fileInputRef}
         type="file"
@@ -515,7 +524,6 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
           FULL CAMERA VIEWPORT WITH UI OVERLAY (MATCHING image_1.png)
       ======================================================== */}
       <div className="relative flex-1 w-full min-h-[520px] max-h-[720px] sm:min-h-[580px] bg-black flex items-center justify-center overflow-hidden">
-        {/* Active Camera Video Feed */}
         <video
           ref={videoRef}
           playsInline
@@ -542,7 +550,7 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
           </div>
         )}
 
-        {/* CAMERA ERROR / PERMISSION DENIED STATE */}
+        {/* CAMERA ERROR */}
         {!isInitializing && cameraError && (
           <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/95 p-6 text-center max-w-sm mx-auto">
             <div className="w-14 h-14 rounded-2xl bg-red-950/80 border border-red-800 text-red-400 flex items-center justify-center mb-3">
@@ -571,35 +579,25 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
         )}
 
         {/* ========================================================
-            DARK SEMI-TRANSPARENT OVERLAY & SQUARE SCAN RETICLE
-            (Exact reproduction of image_1.png)
+            DARK OVERLAY & SQUARE SCAN RETICLE (MATCHING image_1.png)
         ======================================================== */}
         <div className="absolute inset-0 z-20 pointer-events-none flex flex-col justify-between items-center py-8 px-6 bg-black/35 backdrop-brightness-95">
-          {/* Top Center Text: "Find a QR code" */}
           <div className="pt-2 text-center pointer-events-auto">
             <h2 className="text-lg sm:text-xl font-bold text-white tracking-wide drop-shadow-md">
               Find a QR code
             </h2>
             <p className="text-[11px] text-zinc-300 font-medium drop-shadow mt-0.5">
-              وجه الكاميرا نحو رمز QR الملصق لدى المحل
+              وجه الكاميرا نحو كود QR الموضوع لدى الكاشير
             </p>
           </div>
 
-          {/* Center Square Scanning Area with 4 White Corner Brackets ("L" Shapes) */}
+          {/* 4 White Corner Brackets ("L" Shapes) */}
           <div className="relative w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center">
-            {/* Top-Left Bracket */}
             <div className="absolute top-0 left-0 w-11 h-11 border-t-[5px] border-l-[5px] border-white rounded-tl-sm drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]" />
-
-            {/* Top-Right Bracket */}
             <div className="absolute top-0 right-0 w-11 h-11 border-t-[5px] border-r-[5px] border-white rounded-tr-sm drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]" />
-
-            {/* Bottom-Left Bracket */}
             <div className="absolute bottom-0 left-0 w-11 h-11 border-b-[5px] border-l-[5px] border-white rounded-bl-sm drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]" />
-
-            {/* Bottom-Right Bracket */}
             <div className="absolute bottom-0 right-0 w-11 h-11 border-b-[5px] border-r-[5px] border-white rounded-br-sm drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]" />
 
-            {/* Subtle sweeping animated laser line */}
             {cameraActive && (
               <div
                 className="absolute left-3 right-3 h-0.5 bg-gradient-to-r from-transparent via-[#76FF03] to-transparent shadow-[0_0_12px_#76FF03] animate-bounce"
@@ -608,10 +606,9 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
             )}
           </div>
 
-          {/* Bottom Dark Bar with Two Circular Buttons (Flashlight & Gallery) */}
+          {/* Bottom Dark Bar with Flashlight & Gallery Buttons */}
           <div className="w-full flex items-center justify-center pb-2 pointer-events-auto">
             <div className="flex items-center gap-14 px-8 py-3 rounded-full bg-black/65 backdrop-blur-xl border border-white/10 shadow-2xl">
-              {/* Left Button: White Flashlight Icon (Torch Toggle) */}
               <button
                 type="button"
                 onClick={toggleTorch}
@@ -626,7 +623,6 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
                 <Flashlight className={`w-6 h-6 stroke-[2.2] ${torchOn ? 'fill-black' : ''}`} />
               </button>
 
-              {/* Right Button: White Gallery / Upload Icon */}
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
@@ -641,111 +637,125 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
         </div>
       </div>
 
-      {/* UNRECOGNIZED QR ALERT */}
-      {unrecognizedCode && (
-        <div className="mx-4 mt-3 p-3 rounded-2xl bg-amber-950/80 border border-amber-500/50 text-amber-200 text-xs flex items-start gap-2.5 animate-in fade-in">
-          <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-          <div className="flex-1 min-w-0">
-            <div className="font-bold text-amber-300">رمز QR غير مسجل في شبكة Pointili</div>
-            <div className="text-[11px] text-amber-200/80 mt-0.5 break-all">
-              {unrecognizedCode.slice(0, 45)}... تأكد من مسح ملصق Pointili في محلات برج بوعريريج.
-            </div>
-          </div>
-          <button
-            onClick={() => setUnrecognizedCode(null)}
-            className="p-1 rounded-lg text-amber-400 hover:text-white cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
       {/* ========================================================
-          VISUAL SUCCESS INDICATOR & AUTO-REDIRECT
+          ANTI-FRAUD PENDING APPROVAL MODAL (Requirement 2)
       ======================================================== */}
-      {scanResult && scanResult.restaurant && (
+      {activeRequest && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in">
-          <div className="w-full max-w-sm bg-zinc-950 border-2 border-[#76FF03] rounded-3xl p-6 text-center shadow-2xl shadow-[#76FF03]/30 relative overflow-hidden animate-in zoom-in-95">
-            <div className="absolute top-0 right-0 w-36 h-36 bg-[#76FF03]/20 rounded-full blur-3xl pointer-events-none" />
+          <div className="w-full max-w-sm bg-zinc-950 border-2 border-zinc-800 rounded-3xl p-6 text-center shadow-2xl relative overflow-hidden animate-in zoom-in-95">
+            {requestResolvedState === 'pending' && (
+              <>
+                <div className="w-16 h-16 rounded-2xl bg-amber-400/10 border-2 border-amber-400 text-amber-400 mx-auto mb-4 flex items-center justify-center shadow-lg shadow-amber-400/20 animate-pulse">
+                  <Clock className="w-8 h-8 stroke-[2.5]" />
+                </div>
 
-            <div className="w-16 h-16 rounded-2xl bg-[#76FF03] text-black mx-auto mb-3 flex items-center justify-center shadow-xl shadow-[#76FF03]/40">
-              {scanResult.rewardUnlocked ? (
-                <Gift className="w-9 h-9 stroke-[2.5]" />
-              ) : (
-                <CheckCircle2 className="w-9 h-9 stroke-[2.5]" />
-              )}
-            </div>
+                {/* Exact requested text notification */}
+                <h3 className="text-base font-extrabold text-white mb-2 leading-relaxed">
+                  تم إرسال طلب الختم بنجاح. في انتظار موافقة صاحب المحل...
+                </h3>
 
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#76FF03]/10 border border-[#76FF03]/40 text-[#76FF03] text-xs font-bold mb-2">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>
-                {scanResult.rewardUnlocked ? 'المكافأة أصبحت جاهزة! 🎉' : 'تم الختم بنجاح! ⭐'}
-              </span>
-            </div>
+                <p className="text-xs text-zinc-400 mb-4 leading-relaxed">
+                  طلبك معروض الآن على شاشة كاشير <strong className="text-amber-300">{activeRequest.restaurantName}</strong> للتحقق والموافقة.
+                </p>
 
-            <h2 className="text-xl font-extrabold text-white mb-1">
-              {language === 'ar'
-                ? scanResult.restaurant.nameAr || scanResult.restaurant.name
-                : scanResult.restaurant.name}
-            </h2>
+                {/* Request Verification Details */}
+                <div className="bg-zinc-900/90 rounded-2xl p-4 border border-zinc-800 mb-5 text-right space-y-2 text-xs">
+                  <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
+                    <span className="text-zinc-400">المحل / المتجر:</span>
+                    <span className="font-bold text-white flex items-center gap-1.5">
+                      <span>{activeRequest.restaurantEmoji}</span>
+                      <span>{activeRequest.restaurantName}</span>
+                    </span>
+                  </div>
 
-            <p className="text-xs text-zinc-300 mb-4">
-              {scanResult.rewardUnlocked
-                ? `مبروك! أكملت 6 أختام في ${scanResult.restaurant.nameAr || scanResult.restaurant.name}`
-                : `تم شطب الختم رقم ${scanResult.newCount} من أصل 6 أختام`}
-            </p>
+                  <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
+                    <span className="text-zinc-400">حساب الزبون:</span>
+                    <span className="font-bold text-zinc-200">{activeRequest.userName}</span>
+                  </div>
 
-            {/* 6 Dots Progress Bar */}
-            <div className="bg-black/90 rounded-2xl p-4 border border-zinc-800 mb-4">
-              <div className="flex items-center justify-between text-xs text-zinc-400 mb-3">
-                <span className="font-bold text-white">{t.stampsProgress}</span>
-                <span className="font-mono text-[#76FF03] font-extrabold text-sm">
-                  {scanResult.newCount} / 6
-                </span>
-              </div>
+                  <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
+                    <span className="text-zinc-400">البريد الموثق:</span>
+                    <span className="font-mono text-[11px] text-zinc-300">{activeRequest.userEmail}</span>
+                  </div>
 
-              <div className="grid grid-cols-6 gap-2">
-                {[1, 2, 3, 4, 5, 6].map((i) => {
-                  const isDone = i <= scanResult.newCount;
-                  const isSix = i === 6;
-                  return (
-                    <div
-                      key={i}
-                      className={`aspect-square rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${
-                        isDone
-                          ? 'bg-[#76FF03] text-black ring-2 ring-[#76FF03]/50 scale-105 shadow-md shadow-[#76FF03]/40'
-                          : isSix
-                          ? 'border-2 border-dashed border-[#76FF03] bg-[#76FF03]/10 text-[#76FF03]'
-                          : 'border border-dashed border-zinc-700 bg-zinc-900 text-zinc-500'
-                      }`}
-                    >
-                      {isDone ? (isSix ? '🎁' : '✓') : isSix ? '🎁' : i}
-                    </div>
-                  );
-                })}
-              </div>
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-zinc-400">الحالة:</span>
+                    <span className="inline-flex items-center gap-1.5 text-amber-400 font-bold">
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                      <span>قيد المراجعة لدى الكاشير...</span>
+                    </span>
+                  </div>
+                </div>
 
-              <div className="mt-3 text-[11px] text-[#76FF03] font-semibold flex items-center justify-center gap-1">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>جاري الانتقال لبطاقات الولاء...</span>
-              </div>
-            </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleDismissPending}
+                    className="w-full py-3 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-850 text-zinc-400 hover:text-white text-xs font-semibold border border-zinc-800 transition-colors cursor-pointer"
+                  >
+                    إلغاء الطلب والعودة للمسح
+                  </button>
+                </div>
+              </>
+            )}
 
-            <button
-              type="button"
-              onClick={onNavigateToCards}
-              className="w-full py-3.5 px-4 rounded-xl bg-[#76FF03] hover:bg-[#8aff24] text-black font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#76FF03]/30 active:scale-[0.98] transition-all cursor-pointer"
-            >
-              <span>عرض بطاقتي في لوحة التحكم</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            {requestResolvedState === 'accepted' && (
+              <>
+                <div className="w-16 h-16 rounded-2xl bg-[#76FF03] text-black mx-auto mb-3 flex items-center justify-center shadow-xl shadow-[#76FF03]/40">
+                  <CheckCircle2 className="w-9 h-9 stroke-[2.5]" />
+                </div>
+
+                <h3 className="text-lg font-extrabold text-white mb-1">
+                  🎉 وافق صاحب المحل على طلبك!
+                </h3>
+
+                <p className="text-xs text-zinc-300 mb-4">
+                  تم شطب ختم جديد في بطاقة ولاء {activeRequest.restaurantName} بنجاح.
+                </p>
+
+                <div className="p-3 rounded-2xl bg-black border border-zinc-800 text-xs text-zinc-400 mb-4">
+                  رصيدك الجديد: <strong className="text-[#76FF03] font-mono text-sm">{newStampCount} / 6 أختام</strong>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={onNavigateToCards}
+                  className="w-full py-3.5 px-4 rounded-xl bg-[#76FF03] hover:bg-[#8aff24] text-black font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#76FF03]/30 transition-all cursor-pointer"
+                >
+                  <span>عرض بطاقتي في لوحة التحكم</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </>
+            )}
+
+            {requestResolvedState === 'rejected' && (
+              <>
+                <div className="w-16 h-16 rounded-2xl bg-red-950/80 border-2 border-red-600 text-red-400 mx-auto mb-3 flex items-center justify-center shadow-xl shadow-red-600/20">
+                  <AlertCircle className="w-8 h-8 stroke-[2.5]" />
+                </div>
+
+                <h3 className="text-lg font-extrabold text-white mb-1">
+                  عذراً، رفض صاحب المحل الطلب
+                </h3>
+
+                <p className="text-xs text-zinc-400 mb-5 leading-relaxed">
+                  لم يتم اعتماد الختم من قِبل كاشير {activeRequest.restaurantName}. تأكد من تواجدك في المحل واستلام الخدمة مباشرة.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={handleDismissPending}
+                  className="w-full py-3 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-xs border border-zinc-800 transition-colors cursor-pointer"
+                >
+                  إغلاق والعودة
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
 
-      {/* ========================================================
-          OPTIONAL MANUAL CODE INPUT TOGGLE (DISCREET FALLBACK)
-      ======================================================== */}
+      {/* Manual Code Fallback */}
       <div className="px-4 mt-3 max-w-lg mx-auto w-full">
         <button
           type="button"
@@ -785,7 +795,7 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
                 type="submit"
                 className="px-4 py-2 bg-[#76FF03] hover:bg-[#8aff24] text-black font-extrabold text-xs rounded-xl transition-all cursor-pointer"
               >
-                تأكيد
+                إرسال الطلب
               </button>
             </div>
           </form>

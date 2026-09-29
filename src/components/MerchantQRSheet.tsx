@@ -9,6 +9,7 @@ interface MerchantQRSheetProps {
   isOpen: boolean;
   onClose: () => void;
   onSimulateCustomerScan: (restaurantId: string) => void;
+  initialRestaurantId?: string;
 }
 
 export const MerchantQRSheet: React.FC<MerchantQRSheetProps> = ({
@@ -16,8 +17,17 @@ export const MerchantQRSheet: React.FC<MerchantQRSheetProps> = ({
   isOpen,
   onClose,
   onSimulateCustomerScan,
+  initialRestaurantId,
 }) => {
-  const [selectedRestId, setSelectedRestId] = useState<string>(restaurants[0]?.id || '');
+  const [selectedRestId, setSelectedRestId] = useState<string>(
+    initialRestaurantId || restaurants[0]?.id || ''
+  );
+
+  useEffect(() => {
+    if (initialRestaurantId) {
+      setSelectedRestId(initialRestaurantId);
+    }
+  }, [initialRestaurantId]);
   const [copied, setCopied] = useState<boolean>(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
 
