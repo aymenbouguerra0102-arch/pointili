@@ -19,7 +19,6 @@ import {
   Store,
   RefreshCw,
   Volume2,
-  VolumeX,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import jsQR from 'jsqr';
@@ -33,7 +32,6 @@ import {
 import {
   validateScannedQR,
   getStoreQRInfo,
-  OFFICIAL_10_QR_STORES,
   RegisteredQRStore,
 } from '../data/qrStoreDirectory';
 
@@ -144,9 +142,8 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [torchOn, setTorchOn] = useState<boolean>(false);
 
-  // Audio voice alert toggle & Quick tester tray
-  const [voiceEnabled, setVoiceEnabled] = useState<boolean>(true);
-  const [showTesterTray, setShowTesterTray] = useState<boolean>(false);
+  // Audio voice alert enabled by default
+  const voiceEnabled = true;
 
   // Manual fallback toggle
   const [showManualInput, setShowManualInput] = useState<boolean>(false);
@@ -574,40 +571,24 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
-          {/* Voice alert toggle */}
-          <button
-            type="button"
-            onClick={() => setVoiceEnabled((prev) => !prev)}
-            title={voiceEnabled ? 'تعطيل الناطق الصوتي للأكواد' : 'تفعيل الناطق الصوتي للأكواد'}
-            className={`p-2 rounded-xl border text-xs transition-colors cursor-pointer flex items-center gap-1 ${
-              voiceEnabled
-                ? 'bg-amber-400/10 border-amber-400/40 text-amber-300'
-                : 'bg-zinc-900 border-zinc-700 text-zinc-500'
-            }`}
-          >
-            {voiceEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
-          </button>
-
-          {/* Change store dropdown */}
-          <select
-            value={activeStore.id}
-            onChange={(e) => {
-              const found = restaurants.find((r) => r.id === e.target.value);
-              if (found) {
-                setActiveStore(found);
-                setMismatchError(null);
-              }
-            }}
-            className="px-2.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-700 text-xs text-zinc-300 focus:outline-none focus:border-[#76FF03] cursor-pointer max-w-[140px]"
-          >
-            {restaurants.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.imageEmoji} {r.nameAr || r.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Change store dropdown */}
+        <select
+          value={activeStore.id}
+          onChange={(e) => {
+            const found = restaurants.find((r) => r.id === e.target.value);
+            if (found) {
+              setActiveStore(found);
+              setMismatchError(null);
+            }
+          }}
+          className="px-2.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-700 text-xs text-zinc-300 focus:outline-none focus:border-[#76FF03] cursor-pointer max-w-[150px] shrink-0"
+        >
+          {restaurants.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.imageEmoji} {r.nameAr || r.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* ========================================================
@@ -960,82 +941,8 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
         </div>
       )}
 
-      {/* Quick QR Code Test & Inspection Tray */}
-      <div className="px-4 mt-3 max-w-lg mx-auto w-full space-y-2">
-        <button
-          type="button"
-          onClick={() => setShowTesterTray((prev) => !prev)}
-          className="w-full py-2.5 px-3 rounded-xl bg-zinc-900/90 hover:bg-zinc-850 border border-zinc-800 text-zinc-300 text-xs font-bold flex items-center justify-between transition-colors cursor-pointer"
-        >
-          <span className="flex items-center gap-2">
-            <Sparkles className="w-3.5 h-3.5 text-[#76FF03]" />
-            <span>تجربة وفحص مسح أكواد المطاعم الـ 10 (اختبار مباشر)</span>
-          </span>
-          {showTesterTray ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-        </button>
-
-        {showTesterTray && (
-          <div className="p-3.5 bg-zinc-950 border border-zinc-800 rounded-2xl animate-in fade-in space-y-2.5 text-right">
-            <div className="flex items-center justify-between text-[11px] text-zinc-400">
-              <span className="font-bold text-white">انقر لاختبار المسح فوراً:</span>
-              <span className="text-[10px] text-[#76FF03] font-bold">
-                المحل المحدد: {activeStore.nameAr || activeStore.name}
-              </span>
-            </div>
-
-            <p className="text-[10px] text-zinc-400 leading-tight">
-              إذا ضغطت على كود المحل الحالي فسيتم قبوله، وإذا ضغطت على كود محل آخر فسيتم رفضه وسينطق النظام ويحدد كود الـ QR الخاص بهذا المحل لمنع الاحتيال.
-            </p>
-
-            <div className="grid grid-cols-2 gap-1.5 max-h-52 overflow-y-auto pr-1">
-              {OFFICIAL_10_QR_STORES.map((store) => {
-                const isCurrentStore =
-                  activeStore.id.toLowerCase().includes(store.key.toLowerCase()) ||
-                  store.aliases.some((a) => a.toLowerCase() === activeStore.id.toLowerCase());
-                return (
-                  <button
-                    key={store.key}
-                    type="button"
-                    onClick={() => handleProcessScannedCode(store.payload)}
-                    className={`p-2 rounded-xl text-right text-xs font-bold transition-all flex flex-col justify-between border cursor-pointer ${
-                      isCurrentStore
-                        ? 'bg-[#76FF03]/10 border-[#76FF03]/60 text-white hover:bg-[#76FF03]/20 shadow-[0_0_10px_rgba(118,255,3,0.15)]'
-                        : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-850 hover:border-zinc-700'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between w-full">
-                      <span className="truncate">{store.nameAr || store.name}</span>
-                      {isCurrentStore ? (
-                        <span className="text-[9px] bg-[#76FF03] text-black px-1.5 py-0.2 rounded font-black shrink-0">
-                          مطابق
-                        </span>
-                      ) : (
-                        <span className="text-[9px] bg-red-950 text-red-400 px-1 py-0.2 rounded shrink-0">
-                          محل آخر
-                        </span>
-                      )}
-                    </div>
-                    <span className="font-mono text-[9px] text-zinc-500 mt-1 truncate" dir="ltr">
-                      {store.key}
-                    </span>
-                  </button>
-                );
-              })}
-
-              {/* Invalid test code button */}
-              <button
-                type="button"
-                onClick={() => handleProcessScannedCode('pointili://scan?store=unknown_fake_store_34')}
-                className="col-span-2 p-2 rounded-xl bg-red-950/30 border border-red-900/60 text-red-300 hover:bg-red-950/50 text-xs font-bold text-right flex items-center justify-between cursor-pointer"
-              >
-                <span>🧪 تجربة مسح كود غير صالح (خارجي لا ينتمي لشبكتنا)</span>
-                <span className="font-mono text-[10px] text-red-400">unknown_store</span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Manual Code Fallback Button */}
+      {/* Manual Code Fallback */}
+      <div className="px-4 mt-3 max-w-lg mx-auto w-full">
         <button
           type="button"
           onClick={() => setShowManualInput((prev) => !prev)}
