@@ -18,6 +18,8 @@ import {
   ShieldAlert,
   Store,
   RefreshCw,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import jsQR from 'jsqr';
@@ -32,6 +34,7 @@ import {
   validateScannedQR,
   getStoreQRInfo,
   OFFICIAL_10_QR_STORES,
+  RegisteredQRStore,
 } from '../data/qrStoreDirectory';
 
 interface QRScannerTabProps {
@@ -100,6 +103,21 @@ function playErrorTone() {
   } catch {}
 }
 
+function speakAlert(text: string) {
+  try {
+    if ('speechSynthesis' in window && text) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'ar-SA';
+      utterance.rate = 0.95;
+      utterance.pitch = 1.0;
+      window.speechSynthesis.speak(utterance);
+    }
+  } catch (err) {
+    console.warn('SpeechSynthesis error:', err);
+  }
+}
+
 export const QRScannerTab: React.FC<QRScannerTabProps> = ({
   restaurants,
   currentUser,
@@ -126,15 +144,24 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [torchOn, setTorchOn] = useState<boolean>(false);
 
+  // Audio voice alert toggle & Quick tester tray
+  const [voiceEnabled, setVoiceEnabled] = useState<boolean>(true);
+  const [showTesterTray, setShowTesterTray] = useState<boolean>(false);
+
   // Manual fallback toggle
   const [showManualInput, setShowManualInput] = useState<boolean>(false);
   const [manualCodeInput, setManualCodeInput] = useState<string>('');
   const [manualCodeError, setManualCodeError] = useState<string | null>(null);
 
-  // Anti-Fraud Mismatch Error State
+  // Anti-Fraud Mismatch Error State with full details
   const [mismatchError, setMismatchError] = useState<{
     errorMessage: string;
     scannedStoreName: string | null;
+    scannedStoreArabicName?: string | null;
+    rawPayload: string;
+    scannedStoreKey: string | null;
+    identifiedStore: RegisteredQRStore | null;
+    spokenWarning?: string;
   } | null>(null);
 
   // ANTI-FRAUD PENDING REQUEST STATE
@@ -208,19 +235,29 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
         // MATCH: Proceed with creating the Pending Stamp Request
         handleInitiateStampRequest(activeStore);
       } else {
-        // MISMATCH: Immediately halt and notify the user with an anti-fraud alert
+        // MISMATCH: Immediately halt and notify the user with anti-fraud alert
         playErrorTone();
         navigator.vibrate?.([200, 100, 200]);
+
+        if (voiceEnabled && validation.spokenWarning) {
+          speakAlert(validation.spokenWarning);
+        }
+
         setMismatchError({
           errorMessage:
             validation.errorMessage ||
             `❌ كود غير مطابق! رمز الـ QR الذي تم مسحه لا يخص ${activeStore.nameAr || activeStore.name}.`,
           scannedStoreName: validation.scannedStoreName,
+          scannedStoreArabicName: validation.scannedStoreArabicName,
+          rawPayload: validation.rawPayload || scannedText,
+          scannedStoreKey: validation.scannedStoreKey,
+          identifiedStore: validation.identifiedStore,
+          spokenWarning: validation.spokenWarning,
         });
         stopCamera();
       }
     },
-    [activeStore, handleInitiateStampRequest, stopCamera]
+    [activeStore, handleInitiateStampRequest, stopCamera, voiceEnabled]
   );
 
   // Live polling & event listener for merchant's Accept/Reject action
@@ -482,6 +519,26 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
     startCamera();
   };
 
+  const matchingRestaurantForScannedCode = mismatchError?.scannedStoreKey
+    ? restaurants.find((r) => {
+        const key = mismatchError.scannedStoreKey?.toLowerCase();
+        if (!key) return false;
+        const rId = r.id.toLowerCase();
+        const rName = r.name.toLowerCase();
+        return (
+          rId === key ||
+          rId.replace('bba_', '') === key.replace('bba_', '') ||
+          rName === key ||
+          (mismatchError.identifiedStore &&
+            (rId === mismatchError.identifiedStore.key ||
+              rId.replace('bba_', '') === mismatchError.identifiedStore.key ||
+              mismatchError.identifiedStore.aliases.some(
+                (a) => a.toLowerCase() === rId || a.toLowerCase() === rName
+              )))
+        );
+      })
+    : null;
+
   return (
     <div className="relative w-full min-h-[85vh] flex flex-col font-['Plus_Jakarta_Sans'] select-none bg-black text-white overflow-hidden pb-20">
       <canvas ref={canvasRef} className="hidden" />
@@ -517,24 +574,40 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
           </div>
         </div>
 
-        {/* Change store dropdown */}
-        <select
-          value={activeStore.id}
-          onChange={(e) => {
-            const found = restaurants.find((r) => r.id === e.target.value);
-            if (found) {
-              setActiveStore(found);
-              setMismatchError(null);
-            }
-          }}
-          className="px-2.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-700 text-xs text-zinc-300 focus:outline-none focus:border-[#76FF03] cursor-pointer"
-        >
-          {restaurants.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.imageEmoji} {r.nameAr || r.name}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* Voice alert toggle */}
+          <button
+            type="button"
+            onClick={() => setVoiceEnabled((prev) => !prev)}
+            title={voiceEnabled ? 'تعطيل الناطق الصوتي للأكواد' : 'تفعيل الناطق الصوتي للأكواد'}
+            className={`p-2 rounded-xl border text-xs transition-colors cursor-pointer flex items-center gap-1 ${
+              voiceEnabled
+                ? 'bg-amber-400/10 border-amber-400/40 text-amber-300'
+                : 'bg-zinc-900 border-zinc-700 text-zinc-500'
+            }`}
+          >
+            {voiceEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+          </button>
+
+          {/* Change store dropdown */}
+          <select
+            value={activeStore.id}
+            onChange={(e) => {
+              const found = restaurants.find((r) => r.id === e.target.value);
+              if (found) {
+                setActiveStore(found);
+                setMismatchError(null);
+              }
+            }}
+            className="px-2.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-700 text-xs text-zinc-300 focus:outline-none focus:border-[#76FF03] cursor-pointer max-w-[140px]"
+          >
+            {restaurants.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.imageEmoji} {r.nameAr || r.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* ========================================================
@@ -659,32 +732,99 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
       ======================================================== */}
       {mismatchError && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in">
-          <div className="w-full max-w-sm bg-zinc-950 border-2 border-red-600 rounded-3xl p-6 text-center shadow-2xl shadow-red-600/20 relative overflow-hidden animate-in zoom-in-95">
-            <div className="w-16 h-16 rounded-2xl bg-red-950/90 border-2 border-red-500 text-red-400 mx-auto mb-3 flex items-center justify-center shadow-xl shadow-red-600/30">
-              <ShieldAlert className="w-9 h-9 stroke-[2.5]" />
+          <div className="w-full max-w-sm bg-zinc-950 border-2 border-red-600 rounded-3xl p-5 text-center shadow-2xl shadow-red-600/30 relative overflow-hidden animate-in zoom-in-95">
+            <div className="w-14 h-14 rounded-2xl bg-red-950/90 border-2 border-red-500 text-red-400 mx-auto mb-2.5 flex items-center justify-center shadow-xl shadow-red-600/30">
+              <ShieldAlert className="w-8 h-8 stroke-[2.5]" />
             </div>
 
-            <h3 className="text-lg font-black text-white mb-2">
+            <h3 className="text-base sm:text-lg font-black text-white mb-1">
               ❌ كود غير مطابق للمحل الحالي!
             </h3>
 
-            <div className="p-3.5 rounded-2xl bg-red-950/40 border border-red-800/80 text-xs text-red-200 leading-relaxed mb-4 text-right space-y-1.5">
-              <p>{mismatchError.errorMessage}</p>
-              <div className="pt-2 border-t border-red-900/60 text-[11px] text-zinc-300">
-                🔒 <strong>حماية ضد التلاعب:</strong> يمنع النظام إضافة أي طلب نقاط إذا كان رمز الـ QR يخص متجراً آخر.
+            <p className="text-[11px] text-red-300 font-medium mb-3">
+              نظام التحقق الأمني: يمنع التلاعب ومسح كود يخص محلاً آخر
+            </p>
+
+            {/* DETAILED QR CODE REVEAL CARD */}
+            <div className="p-3.5 rounded-2xl bg-red-950/40 border border-red-800/80 text-xs text-right space-y-2.5 mb-3.5">
+              {/* Highlight which store this QR belongs to */}
+              <div className="p-2.5 rounded-xl bg-black/75 border border-red-800/60">
+                <div className="text-[10px] text-zinc-400 font-bold mb-1 flex items-center justify-between">
+                  <span>هذا الرمز هو كود QR خاص بـ:</span>
+                  <span className="font-mono text-[9px] bg-red-500/20 text-red-300 px-1.5 py-0.5 rounded border border-red-500/30 font-bold">
+                    Code QR
+                  </span>
+                </div>
+                <div className="text-sm font-black text-[#76FF03] flex items-center gap-1.5">
+                  <Store className="w-4 h-4 text-[#76FF03] shrink-0" />
+                  <span className="truncate">
+                    {mismatchError.scannedStoreName || 'كود خارجي / غير معتمد'}
+                  </span>
+                </div>
               </div>
+
+              {/* Scanned Payload */}
+              <div className="flex items-center justify-between py-1 px-1 border-b border-red-900/40 text-[11px]">
+                <span className="text-zinc-400 font-medium">كود الـ QR الممسوح:</span>
+                <span className="font-mono text-[11px] text-amber-300 font-bold max-w-[160px] truncate" dir="ltr">
+                  {mismatchError.rawPayload || mismatchError.scannedStoreKey || 'pointili://...'}
+                </span>
+              </div>
+
+              {/* Target Venue */}
+              <div className="flex items-center justify-between py-1 px-1 text-[11px]">
+                <span className="text-zinc-400 font-medium">المحل المطلوب حالياً:</span>
+                <span className="font-bold text-white truncate max-w-[160px]">
+                  {activeStore.nameAr || activeStore.name}
+                </span>
+              </div>
+
+              {/* Message */}
+              <p className="pt-2 text-zinc-300 text-[11px] leading-relaxed border-t border-red-900/40">
+                {mismatchError.errorMessage}
+              </p>
             </div>
 
-            <div className="space-y-2">
+            {/* Voice repeat button */}
+            <button
+              type="button"
+              onClick={() => {
+                if (mismatchError.spokenWarning) {
+                  speakAlert(mismatchError.spokenWarning);
+                }
+              }}
+              className="w-full mb-3 py-2 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-zinc-700/80 text-zinc-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition-colors"
+            >
+              <Volume2 className="w-4 h-4 text-amber-400" />
+              <span>استمع إلى النطق الصوتي للتحذير 🔊</span>
+            </button>
+
+            {/* Switch store action */}
+            {matchingRestaurantForScannedCode && (
               <button
                 type="button"
-                onClick={handleDismissMismatch}
-                className="w-full py-3.5 px-4 rounded-xl bg-white hover:bg-zinc-200 text-black font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer"
+                onClick={() => {
+                  const target = matchingRestaurantForScannedCode;
+                  setActiveStore(target);
+                  setMismatchError(null);
+                  isHandlingScanRef.current = false;
+                  handleInitiateStampRequest(target);
+                }}
+                className="w-full mb-2 py-3 px-4 rounded-xl bg-[#76FF03] hover:bg-[#8aff24] text-black font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#76FF03]/25 cursor-pointer transition-all"
               >
-                <RefreshCw className="w-4 h-4" />
-                <span>إعادة مسح كود {activeStore.nameAr || activeStore.name}</span>
+                <span>التبديل إلى {matchingRestaurantForScannedCode.nameAr || matchingRestaurantForScannedCode.name} ومسح الختم له</span>
+                <ArrowRight className="w-4 h-4" />
               </button>
-            </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleDismissMismatch}
+              className="w-full py-2.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>إعادة مسح كود {activeStore.nameAr || activeStore.name}</span>
+            </button>
           </div>
         </div>
       )}
@@ -820,8 +960,82 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
         </div>
       )}
 
-      {/* Manual Code Fallback */}
-      <div className="px-4 mt-3 max-w-lg mx-auto w-full">
+      {/* Quick QR Code Test & Inspection Tray */}
+      <div className="px-4 mt-3 max-w-lg mx-auto w-full space-y-2">
+        <button
+          type="button"
+          onClick={() => setShowTesterTray((prev) => !prev)}
+          className="w-full py-2.5 px-3 rounded-xl bg-zinc-900/90 hover:bg-zinc-850 border border-zinc-800 text-zinc-300 text-xs font-bold flex items-center justify-between transition-colors cursor-pointer"
+        >
+          <span className="flex items-center gap-2">
+            <Sparkles className="w-3.5 h-3.5 text-[#76FF03]" />
+            <span>تجربة وفحص مسح أكواد المطاعم الـ 10 (اختبار مباشر)</span>
+          </span>
+          {showTesterTray ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
+
+        {showTesterTray && (
+          <div className="p-3.5 bg-zinc-950 border border-zinc-800 rounded-2xl animate-in fade-in space-y-2.5 text-right">
+            <div className="flex items-center justify-between text-[11px] text-zinc-400">
+              <span className="font-bold text-white">انقر لاختبار المسح فوراً:</span>
+              <span className="text-[10px] text-[#76FF03] font-bold">
+                المحل المحدد: {activeStore.nameAr || activeStore.name}
+              </span>
+            </div>
+
+            <p className="text-[10px] text-zinc-400 leading-tight">
+              إذا ضغطت على كود المحل الحالي فسيتم قبوله، وإذا ضغطت على كود محل آخر فسيتم رفضه وسينطق النظام ويحدد كود الـ QR الخاص بهذا المحل لمنع الاحتيال.
+            </p>
+
+            <div className="grid grid-cols-2 gap-1.5 max-h-52 overflow-y-auto pr-1">
+              {OFFICIAL_10_QR_STORES.map((store) => {
+                const isCurrentStore =
+                  activeStore.id.toLowerCase().includes(store.key.toLowerCase()) ||
+                  store.aliases.some((a) => a.toLowerCase() === activeStore.id.toLowerCase());
+                return (
+                  <button
+                    key={store.key}
+                    type="button"
+                    onClick={() => handleProcessScannedCode(store.payload)}
+                    className={`p-2 rounded-xl text-right text-xs font-bold transition-all flex flex-col justify-between border cursor-pointer ${
+                      isCurrentStore
+                        ? 'bg-[#76FF03]/10 border-[#76FF03]/60 text-white hover:bg-[#76FF03]/20 shadow-[0_0_10px_rgba(118,255,3,0.15)]'
+                        : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-850 hover:border-zinc-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <span className="truncate">{store.nameAr || store.name}</span>
+                      {isCurrentStore ? (
+                        <span className="text-[9px] bg-[#76FF03] text-black px-1.5 py-0.2 rounded font-black shrink-0">
+                          مطابق
+                        </span>
+                      ) : (
+                        <span className="text-[9px] bg-red-950 text-red-400 px-1 py-0.2 rounded shrink-0">
+                          محل آخر
+                        </span>
+                      )}
+                    </div>
+                    <span className="font-mono text-[9px] text-zinc-500 mt-1 truncate" dir="ltr">
+                      {store.key}
+                    </span>
+                  </button>
+                );
+              })}
+
+              {/* Invalid test code button */}
+              <button
+                type="button"
+                onClick={() => handleProcessScannedCode('pointili://scan?store=unknown_fake_store_34')}
+                className="col-span-2 p-2 rounded-xl bg-red-950/30 border border-red-900/60 text-red-300 hover:bg-red-950/50 text-xs font-bold text-right flex items-center justify-between cursor-pointer"
+              >
+                <span>🧪 تجربة مسح كود غير صالح (خارجي لا ينتمي لشبكتنا)</span>
+                <span className="font-mono text-[10px] text-red-400">unknown_store</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Manual Code Fallback Button */}
         <button
           type="button"
           onClick={() => setShowManualInput((prev) => !prev)}

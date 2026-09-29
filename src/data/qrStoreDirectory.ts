@@ -272,18 +272,24 @@ export function extractStoreIdFromQRPayload(scannedText: string): string | null 
   return clean;
 }
 
+export interface QRValidationResult {
+  isValid: boolean;
+  scannedStoreKey: string | null;
+  scannedStoreName: string | null;
+  scannedStoreArabicName?: string | null;
+  rawPayload: string;
+  identifiedStore: RegisteredQRStore | null;
+  errorMessage?: string;
+  spokenWarning?: string;
+}
+
 /**
  * Validates if the scanned QR code matches the target restaurant that the user is currently browsing
  */
 export function validateScannedQR(
   scannedText: string,
   targetRestaurant: { id: string; name: string; nameAr?: string }
-): {
-  isValid: boolean;
-  scannedStoreKey: string | null;
-  scannedStoreName: string | null;
-  errorMessage?: string;
-} {
+): QRValidationResult {
   const extractedStoreId = extractStoreIdFromQRPayload(scannedText);
 
   if (!extractedStoreId) {
@@ -291,7 +297,10 @@ export function validateScannedQR(
       isValid: false,
       scannedStoreKey: null,
       scannedStoreName: null,
+      rawPayload: scannedText || '',
+      identifiedStore: null,
       errorMessage: '❌ رمز الـ QR غير صالح أو لا يحتوي على كود متجر معتمد في تطبيق Pointili.',
+      spokenWarning: 'رمز الـ QR غير صالح أو غير معتمد في تطبيق Pointili.',
     };
   }
 
@@ -313,17 +322,28 @@ export function validateScannedQR(
         isValid: true,
         scannedStoreKey: targetStoreInfo.key,
         scannedStoreName: targetStoreInfo.nameAr || targetStoreInfo.name,
+        scannedStoreArabicName: targetStoreInfo.nameAr,
+        rawPayload: scannedText,
+        identifiedStore: targetStoreInfo,
       };
     } else {
       const otherDisplayName = scannedStoreInfo
         ? (scannedStoreInfo.nameAr ? `${scannedStoreInfo.nameAr} (${scannedStoreInfo.name})` : scannedStoreInfo.name)
         : extractedStoreId.replace('bba_', '').replace(/_/g, ' ');
 
+      const spoken = scannedStoreInfo
+        ? `كود غير مطابق! هذا كود QR خاص بـ ${scannedStoreInfo.nameAr || scannedStoreInfo.name} وليس ${targetDisplayName}.`
+        : `كود غير مطابق! رمز الـ QR الممسوح لا يخص ${targetDisplayName}.`;
+
       return {
         isValid: false,
         scannedStoreKey: extractedStoreId,
         scannedStoreName: otherDisplayName,
-        errorMessage: `❌ كود غير مطابق! رمز الـ QR الذي قمت بمسحه يخص "${otherDisplayName}" وليس "${targetDisplayName}". يرجى التأكد من مسح ملصق هذا المحل حصراً لمنع التلاعب.`,
+        scannedStoreArabicName: scannedStoreInfo?.nameAr,
+        rawPayload: scannedText,
+        identifiedStore: scannedStoreInfo,
+        errorMessage: `❌ كود غير مطابق! رمز الـ QR الذي قمت بمسحه يخص "${otherDisplayName}" وليس "${targetDisplayName}". يرجى مسح ملصق هذا المحل حصراً لمنع التلاعب.`,
+        spokenWarning: spoken,
       };
     }
   } else {
@@ -341,17 +361,28 @@ export function validateScannedQR(
         isValid: true,
         scannedStoreKey: targetRestaurant.id,
         scannedStoreName: targetDisplayName,
+        scannedStoreArabicName: targetRestaurant.nameAr,
+        rawPayload: scannedText,
+        identifiedStore: null,
       };
     } else {
       const otherDisplayName = scannedStoreInfo
         ? (scannedStoreInfo.nameAr ? `${scannedStoreInfo.nameAr} (${scannedStoreInfo.name})` : scannedStoreInfo.name)
         : extractedStoreId.replace('bba_', '').replace(/_/g, ' ');
 
+      const spoken = scannedStoreInfo
+        ? `كود غير مطابق! هذا كود QR لـ ${scannedStoreInfo.nameAr || scannedStoreInfo.name} وليس ${targetDisplayName}.`
+        : `كود غير مطابق! هذا الكود لا يطابق المحل الحالي.`;
+
       return {
         isValid: false,
         scannedStoreKey: extractedStoreId,
         scannedStoreName: otherDisplayName,
+        scannedStoreArabicName: scannedStoreInfo?.nameAr,
+        rawPayload: scannedText,
+        identifiedStore: scannedStoreInfo,
         errorMessage: `❌ كود غير مطابق! هذا الرمز يخص "${otherDisplayName}" ولا يطابق المحل الحالي "${targetDisplayName}".`,
+        spokenWarning: spoken,
       };
     }
   }
