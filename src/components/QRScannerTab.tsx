@@ -684,15 +684,8 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
         {/* ========================================================
             DARK OVERLAY & SQUARE SCAN RETICLE (MATCHING image_1.png)
         ======================================================== */}
-        <div className="absolute inset-0 z-20 pointer-events-none flex flex-col justify-between items-center py-7 px-6 bg-black/35 backdrop-brightness-95">
-          <div className="pt-1 text-center pointer-events-auto">
-            <h2 className="text-lg sm:text-xl font-bold text-white tracking-wide drop-shadow-md">
-              Find a QR code
-            </h2>
-            <p className="text-[11px] text-zinc-200 font-medium drop-shadow mt-0.5">
-              امسح رمز QR الخاص بـ <span className="text-[#76FF03] font-bold">"{activeStore.nameAr || activeStore.name}"</span>
-            </p>
-          </div>
+        <div className="absolute inset-0 z-20 pointer-events-none flex flex-col justify-between items-center py-6 px-6 bg-black/35 backdrop-brightness-95">
+          <div className="pt-1" />
 
           {/* 4 White Corner Brackets ("L" Shapes) with SCAN ME badge */}
           <div className="relative w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center">
