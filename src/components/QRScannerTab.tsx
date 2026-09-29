@@ -34,6 +34,7 @@ import {
 import {
   validateScannedQR,
   getStoreQRInfo,
+  identifyStoreFromQR,
   RegisteredQRStore,
 } from '../data/qrStoreDirectory';
 
@@ -231,41 +232,42 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
     [currentUser, stopCamera]
   );
 
-  // Central QR Code Verification Logic (Anti-Fraud)
+  // Direct Store Recognition from Scanned QR Code
   const handleProcessScannedCode = useCallback(
     (scannedText: string) => {
       if (isHandlingScanRef.current || !scannedText) return;
 
-      // Validate the scanned QR code against the currently selected store
-      const validation = validateScannedQR(scannedText, activeStore);
+      // Directly identify which store this QR code belongs to
+      const identified = identifyStoreFromQR(scannedText, restaurants);
 
-      if (validation.isValid) {
-        // MATCH: Proceed with creating the Pending Stamp Request
-        handleInitiateStampRequest(activeStore);
+      if (identified) {
+        // SUCCESS: Target store recognized instantly!
+        setActiveStore(identified.restaurant);
+        handleInitiateStampRequest(identified.restaurant);
       } else {
-        // MISMATCH: Immediately halt and notify the user with anti-fraud alert
+        // UNRECOGNIZED: Code is not part of Pointili network
         playErrorTone();
         navigator.vibrate?.([200, 100, 200]);
 
-        if (voiceEnabled && validation.spokenWarning) {
-          speakAlert(validation.spokenWarning);
+        const spoken = 'رمز الـ QR الممسوح غير معتمد في شبكة Pointili.';
+        if (voiceEnabled) {
+          speakAlert(spoken);
         }
 
         setMismatchError({
           errorMessage:
-            validation.errorMessage ||
-            `❌ كود غير مطابق! رمز الـ QR الذي تم مسحه لا يخص ${activeStore.nameAr || activeStore.name}.`,
-          scannedStoreName: validation.scannedStoreName,
-          scannedStoreArabicName: validation.scannedStoreArabicName,
-          rawPayload: validation.rawPayload || scannedText,
-          scannedStoreKey: validation.scannedStoreKey,
-          identifiedStore: validation.identifiedStore,
-          spokenWarning: validation.spokenWarning,
+            '❌ رمز الـ QR الذي تم مسحه غير معتمد أو غير مسجل لأي متجر في شبكة Pointili. يرجى مسح كود QR المعتمد للمحل.',
+          scannedStoreName: null,
+          scannedStoreArabicName: null,
+          rawPayload: scannedText,
+          scannedStoreKey: null,
+          identifiedStore: null,
+          spokenWarning: spoken,
         });
         stopCamera();
       }
     },
-    [activeStore, handleInitiateStampRequest, stopCamera, voiceEnabled]
+    [restaurants, handleInitiateStampRequest, stopCamera, voiceEnabled]
   );
 
   // Requirement: "تحقق وأرسل" Action at SCAN ME
@@ -273,41 +275,17 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
     (customCode?: string) => {
       if (isHandlingScanRef.current) return;
 
-      const officialInfo = getStoreQRInfo(activeStore);
-      const codeToValidate =
-        customCode ||
-        officialInfo?.payload ||
-        activeStore.qrSecretCode ||
-        `pointili://scan?store=${activeStore.id}`;
+      if (customCode) {
+        handleProcessScannedCode(customCode);
+        return;
+      }
 
-      // Central anti-fraud verification
-      const validation = validateScannedQR(codeToValidate, activeStore);
-
-      if (validation.isValid) {
-        handleInitiateStampRequest(activeStore);
-      } else {
-        playErrorTone();
-        navigator.vibrate?.([200, 100, 200]);
-
-        if (voiceEnabled && validation.spokenWarning) {
-          speakAlert(validation.spokenWarning);
-        }
-
-        setMismatchError({
-          errorMessage:
-            validation.errorMessage ||
-            `❌ كود غير مطابق! رمز الـ QR لا يخص ${activeStore.nameAr || activeStore.name}.`,
-          scannedStoreName: validation.scannedStoreName,
-          scannedStoreArabicName: validation.scannedStoreArabicName,
-          rawPayload: validation.rawPayload || codeToValidate,
-          scannedStoreKey: validation.scannedStoreKey,
-          identifiedStore: validation.identifiedStore,
-          spokenWarning: validation.spokenWarning,
-        });
-        stopCamera();
+      const target = preSelectedRestaurant || activeStore;
+      if (target) {
+        handleInitiateStampRequest(target);
       }
     },
-    [activeStore, handleInitiateStampRequest, stopCamera, voiceEnabled]
+    [activeStore, preSelectedRestaurant, handleInitiateStampRequest, handleProcessScannedCode]
   );
 
   // Auto-trigger verify and send if navigated with autoTrigger flag
@@ -632,45 +610,17 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
       />
 
       {/* ========================================================
-          CURRENT VENUE SELECTOR & SECURITY VERIFICATION PILL
+          AUTOMATIC SMART STORE DETECTION BANNER (NO PRE-SELECTION NEEDED)
       ======================================================== */}
-      <div className="px-4 py-2 bg-zinc-950 border-b border-zinc-800/80 flex items-center justify-between gap-2 z-30">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-8 h-8 rounded-xl bg-zinc-900 border border-[#76FF03]/40 flex items-center justify-center text-sm shrink-0">
-            {activeStore.imageEmoji}
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-400 font-bold">المحل المستهدف:</span>
-              <span className="text-xs font-extrabold text-white truncate">
-                {activeStore.nameAr || activeStore.name}
-              </span>
-            </div>
-            <div className="text-[10px] text-[#76FF03] font-mono flex items-center gap-1">
-              <ShieldCheck className="w-3 h-3 text-[#76FF03]" />
-              <span>التحقق الأمني نشط · كود المحل الحصري</span>
-            </div>
-          </div>
+      <div className="px-4 py-2.5 bg-zinc-950 border-b border-zinc-800/80 flex items-center justify-between gap-2 z-30">
+        <div className="flex items-center gap-2">
+          <div className="w-2.5 h-2.5 rounded-full bg-[#76FF03] animate-pulse" />
+          <span className="text-xs font-black text-white">الماسح التلقائي المباشر</span>
         </div>
-
-        {/* Change store dropdown */}
-        <select
-          value={activeStore.id}
-          onChange={(e) => {
-            const found = restaurants.find((r) => r.id === e.target.value);
-            if (found) {
-              setActiveStore(found);
-              setMismatchError(null);
-            }
-          }}
-          className="px-2.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-700 text-xs text-zinc-300 focus:outline-none focus:border-[#76FF03] cursor-pointer max-w-[150px] shrink-0"
-        >
-          {restaurants.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.imageEmoji} {r.nameAr || r.name}
-            </option>
-          ))}
-        </select>
+        <div className="text-[11px] text-[#76FF03] font-bold flex items-center gap-1.5 font-mono">
+          <Sparkles className="w-3.5 h-3.5 text-[#76FF03]" />
+          <span>يتعرف على المحل تلقائياً عند المسح ⚡</span>
+        </div>
       </div>
 
       {/* ========================================================
@@ -820,49 +770,25 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
             </div>
 
             <h3 className="text-base sm:text-lg font-black text-white mb-1">
-              ❌ كود غير مطابق للمحل الحالي!
+              ❌ رمز QR غير معتمد في تطبيق Pointili!
             </h3>
 
             <p className="text-[11px] text-red-300 font-medium mb-3">
-              نظام التحقق الأمني: يمنع التلاعب ومسح كود يخص محلاً آخر
+              نظام الأمان: هذا الرمز غير مسجل لأي محل معتمد في شبكة التطبيق
             </p>
 
             {/* DETAILED QR CODE REVEAL CARD */}
             <div className="p-3.5 rounded-2xl bg-red-950/40 border border-red-800/80 text-xs text-right space-y-2.5 mb-3.5">
-              {/* Highlight which store this QR belongs to */}
-              <div className="p-2.5 rounded-xl bg-black/75 border border-red-800/60">
-                <div className="text-[10px] text-zinc-400 font-bold mb-1 flex items-center justify-between">
-                  <span>هذا الرمز هو كود QR خاص بـ:</span>
-                  <span className="font-mono text-[9px] bg-red-500/20 text-red-300 px-1.5 py-0.5 rounded border border-red-500/30 font-bold">
-                    Code QR
-                  </span>
-                </div>
-                <div className="text-sm font-black text-[#76FF03] flex items-center gap-1.5">
-                  <Store className="w-4 h-4 text-[#76FF03] shrink-0" />
-                  <span className="truncate">
-                    {mismatchError.scannedStoreName || 'كود خارجي / غير معتمد'}
-                  </span>
-                </div>
-              </div>
-
               {/* Scanned Payload */}
               <div className="flex items-center justify-between py-1 px-1 border-b border-red-900/40 text-[11px]">
                 <span className="text-zinc-400 font-medium">كود الـ QR الممسوح:</span>
                 <span className="font-mono text-[11px] text-amber-300 font-bold max-w-[160px] truncate" dir="ltr">
-                  {mismatchError.rawPayload || mismatchError.scannedStoreKey || 'pointili://...'}
-                </span>
-              </div>
-
-              {/* Target Venue */}
-              <div className="flex items-center justify-between py-1 px-1 text-[11px]">
-                <span className="text-zinc-400 font-medium">المحل المطلوب حالياً:</span>
-                <span className="font-bold text-white truncate max-w-[160px]">
-                  {activeStore.nameAr || activeStore.name}
+                  {mismatchError.rawPayload || mismatchError.scannedStoreKey || 'غير معروف'}
                 </span>
               </div>
 
               {/* Message */}
-              <p className="pt-2 text-zinc-300 text-[11px] leading-relaxed border-t border-red-900/40">
+              <p className="pt-2 text-zinc-300 text-[11px] leading-relaxed">
                 {mismatchError.errorMessage}
               </p>
             </div>
@@ -881,7 +807,7 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
               <span>استمع إلى النطق الصوتي للتحذير 🔊</span>
             </button>
 
-            {/* Switch store action */}
+            {/* Switch store action if a matching restaurant is recognized */}
             {matchingRestaurantForScannedCode && (
               <button
                 type="button"
@@ -894,7 +820,7 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
                 }}
                 className="w-full mb-2 py-3 px-4 rounded-xl bg-[#76FF03] hover:bg-[#8aff24] text-black font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#76FF03]/25 cursor-pointer transition-all"
               >
-                <span>التبديل إلى {matchingRestaurantForScannedCode.nameAr || matchingRestaurantForScannedCode.name} ومسح الختم له</span>
+                <span>اعتماد {matchingRestaurantForScannedCode.nameAr || matchingRestaurantForScannedCode.name} وإرسال طلب الختم</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             )}
@@ -905,7 +831,7 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
               className="w-full py-2.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
             >
               <RefreshCw className="w-3.5 h-3.5" />
-              <span>إعادة مسح كود {activeStore.nameAr || activeStore.name}</span>
+              <span>إعادة المحاولة ومسح كود متجر معتمد</span>
             </button>
           </div>
         </div>

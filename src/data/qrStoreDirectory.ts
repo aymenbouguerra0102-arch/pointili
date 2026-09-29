@@ -449,3 +449,59 @@ export function validateScannedQR(
     }
   }
 }
+
+/**
+ * Directly identifies and resolves the target restaurant from any scanned Pointili QR code
+ * No pre-selection needed - immediate detection!
+ */
+export function identifyStoreFromQR<T extends { id: string; name: string; nameAr?: string; uniqueCode?: string; qrSecretCode?: string }>(
+  scannedText: string,
+  allRestaurants: T[]
+): { restaurant: T; qrInfo: RegisteredQRStore | null } | null {
+  if (!scannedText) return null;
+
+  const extractedId = extractStoreIdFromQRPayload(scannedText);
+  if (!extractedId) return null;
+
+  const cleanExtracted = extractedId.toLowerCase().trim();
+  const qrInfo = getStoreQRInfo(cleanExtracted);
+
+  // Match restaurant in array
+  const matched = allRestaurants.find((r) => {
+    const rId = r.id.toLowerCase();
+    const rName = r.name.toLowerCase();
+    const rNameAr = (r.nameAr || '').toLowerCase();
+    const rUnique = (r.uniqueCode || '').toLowerCase();
+    const rSecret = (r.qrSecretCode || '').toLowerCase();
+
+    if (qrInfo) {
+      if (
+        rId === qrInfo.key ||
+        rId === `bba_${qrInfo.key}` ||
+        rUnique === qrInfo.uniqueCode.toLowerCase() ||
+        rName === qrInfo.name.toLowerCase() ||
+        qrInfo.aliases.some((a) => a.toLowerCase() === rId || a.toLowerCase() === rName)
+      ) {
+        return true;
+      }
+    }
+
+    return (
+      rId === cleanExtracted ||
+      rId.replace('bba_', '') === cleanExtracted.replace('bba_', '') ||
+      rUnique === cleanExtracted ||
+      rSecret === cleanExtracted ||
+      rName === cleanExtracted ||
+      rNameAr === cleanExtracted
+    );
+  });
+
+  if (matched) {
+    return {
+      restaurant: matched,
+      qrInfo: qrInfo || getStoreQRInfo(matched),
+    };
+  }
+
+  return null;
+}
