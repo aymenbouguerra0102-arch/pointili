@@ -1,4 +1,5 @@
 import { DailyActivityPoint, WinnerLogItem, UserProfile, Restaurant } from '../types';
+import { getStoreQRInfo } from './qrStoreDirectory';
 
 // Cryptographic SHA-256 hashes for secure administrative authentication
 // Username: "AYMEN BG", Password: "14072003"
@@ -52,8 +53,15 @@ export function authenticateMerchantOrAdmin(
   if (trimmedPass === '1234') {
     const cleanInput = trimmedUser.toLowerCase();
 
+    // Check if input matches one of the 10 official stores via qrStoreDirectory
+    const qrInfoMatch = getStoreQRInfo(cleanInput);
+
     // Match store by name (e.g. "Le Mirage", "El Bey", "Renaissance", "Express Mansoura"), Arabic name, or ID
     const matched = restaurants.find((r) => {
+      if (qrInfoMatch && getStoreQRInfo(r)?.key === qrInfoMatch.key) {
+        return true;
+      }
+
       const name = r.name.toLowerCase();
       const nameAr = (r.nameAr || '').toLowerCase();
       const nameFr = (r.nameFr || '').toLowerCase();

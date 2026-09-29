@@ -1,7 +1,22 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Restaurant } from '../types';
-import { X, MapPin, Clock, Gift, Sparkles, Check, QrCode, Navigation, Phone, ExternalLink } from 'lucide-react';
+import {
+  X,
+  MapPin,
+  Clock,
+  Gift,
+  Sparkles,
+  Check,
+  QrCode,
+  Navigation,
+  Phone,
+  ExternalLink,
+  ShieldAlert,
+  ShieldCheck,
+  Download,
+} from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
+import { getStoreQRInfo } from '../data/qrStoreDirectory';
 
 interface CardDetailModalProps {
   restaurant: Restaurant | null;
@@ -16,14 +31,17 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({
   onClose,
   onScanStamp,
   onRedeemReward,
-  onDirectAddStamp,
 }) => {
   const { t, language } = useLanguage();
+  const [showEnlargedQR, setShowEnlargedQR] = useState(false);
 
   if (!restaurant) return null;
 
   const isRewardUnlocked = restaurant.stampsCount >= 6;
   const stampsRemaining = Math.max(0, 6 - restaurant.stampsCount);
+
+  // Check if this store has an official QR code among the 10 registered stores
+  const qrInfo = getStoreQRInfo(restaurant);
 
   const displayName =
     language === 'ar'
@@ -54,89 +72,37 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({
       : restaurant.rewardTitleEn || restaurant.rewardTitle;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-      <div className="w-full max-w-md bg-zinc-950 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 relative max-h-[92vh] overflow-y-auto shadow-2xl font-['Plus_Jakarta_Sans']">
-        {/* Glow */}
-        <div className="absolute top-0 right-0 w-44 h-44 bg-[#76FF03]/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in select-none font-['Plus_Jakarta_Sans']">
+      <div className="w-full max-w-sm bg-zinc-950 border border-zinc-800 rounded-3xl p-5 sm:p-6 relative shadow-2xl overflow-y-auto max-h-[92vh]">
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 p-2 rounded-full bg-zinc-900 text-zinc-400 hover:text-white transition-colors cursor-pointer z-10"
+        >
+          <X className="w-4 h-4" />
+        </button>
 
-        {/* Top Header Controls */}
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#76FF03]" />
-            <span>{restaurant.wilaya || 'ولاية برج بوعريريج (34)'}</span>
-          </span>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-full bg-zinc-900 text-zinc-400 hover:text-white transition-colors cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Restaurant Visual Image Banner */}
-        <div className="relative w-full h-40 rounded-2xl mb-4 overflow-hidden bg-zinc-900 border border-zinc-800">
-          <img
-            src={restaurant.imageUrl}
-            alt={displayName}
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
-
-          {/* Badges on image */}
-          <div className="absolute top-3 left-3 flex items-center gap-2">
-            <span className="w-9 h-9 rounded-xl bg-black/80 backdrop-blur-md border border-zinc-700/80 flex items-center justify-center text-xl shadow-lg">
-              {restaurant.imageEmoji}
-            </span>
-            <span className="px-3 py-1 rounded-full bg-black/80 backdrop-blur-md border border-zinc-700/80 text-xs font-bold text-white">
-              {displayCategory}
-            </span>
+        {/* Restaurant Header */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-700/80 flex items-center justify-center text-3xl shadow-lg shrink-0">
+            {restaurant.imageEmoji}
           </div>
-
-          {/* Google Maps Button on Image */}
-          <a
-            href={restaurant.googleMapsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="absolute top-3 right-3 px-3 py-1.5 rounded-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-xl transition-transform hover:scale-105"
-          >
-            <Navigation className="w-3.5 h-3.5 fill-current" />
-            <span>{t.viewOnMaps}</span>
-          </a>
-
-          {/* Bottom text inside banner */}
-          <div className="absolute bottom-3 left-3 right-3">
-            <h2 className="text-lg font-extrabold text-white tracking-tight drop-shadow-md">
-              {displayName}
-            </h2>
-            <div className="flex items-center gap-1.5 text-xs text-zinc-300 mt-0.5">
-              <MapPin className="w-3.5 h-3.5 text-[#76FF03] shrink-0" />
-              <span>{restaurant.neighborhood || restaurant.address}</span>
-            </div>
+          <div className="min-w-0 pr-6">
+            <h2 className="text-base font-extrabold text-white truncate">{displayName}</h2>
+            <p className="text-xs text-[#76FF03] font-semibold truncate">{displayCategory}</p>
+            <p className="text-[11px] text-zinc-400 truncate">{restaurant.neighborhood}</p>
           </div>
         </div>
 
         {/* Description */}
-        <p className="text-xs text-zinc-300 leading-relaxed mb-4 bg-zinc-900/60 p-3 rounded-xl border border-zinc-800/80">
-          {displayDescription}
-        </p>
+        <p className="text-xs text-zinc-400 leading-relaxed mb-4">{displayDescription}</p>
 
-        {/* 6 STAMPS DETAILED DISPLAY */}
+        {/* EXACTLY 6 CIRCLES (DOTS) CARD PREVIEW */}
         <div className="p-4 rounded-2xl bg-black border border-zinc-800 mb-4">
           <div className="flex items-center justify-between text-xs mb-3">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-white">{t.stampsProgress}</span>
-              <span className="px-2 py-0.5 rounded-full bg-zinc-800 text-[10px] font-mono text-[#76FF03] font-bold">
-                {restaurant.stampsCount}/6
-              </span>
-            </div>
-            <span className="text-xs text-zinc-400">
-              {isRewardUnlocked ? (
-                <span className="text-[#76FF03] font-bold animate-pulse">{t.rewardUnlocked}</span>
-              ) : restaurant.stampsCount === 0 ? (
-                <span className="text-zinc-500">0 أختام (لم يتم المسح بعد)</span>
-              ) : (
-                `باقي ${stampsRemaining} أختام للمكافأة`
-              )}
+            <span className="font-bold text-white">{t.stampsProgress}</span>
+            <span className="font-mono text-[#76FF03] font-extrabold text-sm">
+              {restaurant.stampsCount} / 6
             </span>
           </div>
 
@@ -171,6 +137,71 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({
               );
             })}
           </div>
+        </div>
+
+        {/* ========================================================
+            REQUIREMENT 1: DYNAMIC QR CODE DISPLAY OR COMING SOON
+        ======================================================== */}
+        <div className="mb-4">
+          {qrInfo ? (
+            /* ACTIVE QR CODE FOR ONE OF THE 10 REGISTERED STORES */
+            <div className="p-4 rounded-2xl bg-zinc-900 border border-[#76FF03]/30 text-center relative overflow-hidden">
+              <div className="flex items-center justify-between text-[11px] font-bold text-[#76FF03] mb-2.5">
+                <span className="flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-[#76FF03]" />
+                  <span>رمز QR المعتمد للمحل (جاهز للمسح)</span>
+                </span>
+                <span className="font-mono text-[10px] bg-[#76FF03]/10 px-2 py-0.5 rounded-full border border-[#76FF03]/30">
+                  كود رسمي
+                </span>
+              </div>
+
+              {/* QR Image */}
+              <div className="bg-white p-2.5 rounded-xl mx-auto w-40 h-40 shadow-lg relative flex items-center justify-center border-2 border-zinc-800">
+                <img
+                  src={qrInfo.qrImagePath}
+                  alt={`QR Code ${qrInfo.name}`}
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    const target = e.currentTarget as HTMLImageElement;
+                    if (!target.src.includes(encodeURIComponent(qrInfo.name))) {
+                      target.src = `/qr-codes/${encodeURIComponent(qrInfo.name)}.png`;
+                    }
+                  }}
+                />
+              </div>
+
+              <div className="mt-2.5 text-xs font-bold text-white">
+                {qrInfo.name}
+              </div>
+              <div className="text-[11px] text-zinc-400 font-mono mt-0.5">
+                {qrInfo.payload}
+              </div>
+
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={() => onScanStamp(restaurant)}
+                  className="flex-1 py-2 px-3 rounded-xl bg-[#76FF03] hover:bg-[#8aff24] text-black font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-[#76FF03]/20 cursor-pointer"
+                >
+                  <QrCode className="w-3.5 h-3.5" />
+                  <span>مسح هذا الكود الآن</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* COMING SOON NOTICE FOR ALL OTHER RESTAURANTS */
+            <div className="p-4 rounded-2xl bg-zinc-900/70 border border-zinc-800 text-center">
+              <div className="w-10 h-10 rounded-xl bg-zinc-800 text-zinc-500 mx-auto mb-2 flex items-center justify-center">
+                <QrCode className="w-5 h-5 opacity-40" />
+              </div>
+              <div className="text-xs font-bold text-zinc-300">
+                رمز الـ QR الخاص بهذا المحل لم يتم توليده بعد (قريباً)
+              </div>
+              <p className="text-[11px] text-zinc-500 mt-1 leading-relaxed">
+                ملصق الـ QR المعتمد لهذا المتجر قيد التجهيز من قبل فريق Pointili وسيتم إضافته قريباً في التحديث القادم.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Free Reward Perk Box */}
@@ -241,7 +272,7 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({
               className="w-full py-3.5 px-4 rounded-xl bg-[#76FF03] hover:bg-[#8aff24] active:scale-[0.98] text-black font-extrabold text-sm flex items-center justify-center gap-2 shadow-lg shadow-[#76FF03]/30 transition-all cursor-pointer"
             >
               <QrCode className="w-4 h-4" />
-              <span>{t.scanToEarn}</span>
+              <span>{t.scanToEarn} ({restaurant.nameAr || restaurant.name})</span>
             </button>
           )}
         </div>

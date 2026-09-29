@@ -15,8 +15,9 @@ import {
   ChevronUp,
   Clock,
   ShieldCheck,
+  ShieldAlert,
   Store,
-  Check,
+  RefreshCw,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import jsQR from 'jsqr';
@@ -25,7 +26,13 @@ import { useLanguage } from '../i18n/LanguageContext';
 import {
   createStampRequest,
   getStampRequests,
+  updateStampRequestStatus,
 } from '../data/stampRequestsManager';
+import {
+  validateScannedQR,
+  getStoreQRInfo,
+  OFFICIAL_10_QR_STORES,
+} from '../data/qrStoreDirectory';
 
 interface QRScannerTabProps {
   restaurants: Restaurant[];
@@ -51,7 +58,7 @@ function playScanChime() {
     const osc1 = ctx.createOscillator();
     const gain1 = ctx.createGain();
     osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(587.33, now); // D5
+    osc1.frequency.setValueAtTime(587.33, now);
     gain1.gain.setValueAtTime(0.2, now);
     gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
     osc1.connect(gain1);
@@ -62,7 +69,7 @@ function playScanChime() {
     const osc2 = ctx.createOscillator();
     const gain2 = ctx.createGain();
     osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(880, now + 0.1); // A5
+    osc2.frequency.setValueAtTime(880, now + 0.1);
     gain2.gain.setValueAtTime(0.25, now + 0.1);
     gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
     osc2.connect(gain2);
@@ -72,13 +79,46 @@ function playScanChime() {
   } catch {}
 }
 
+function playErrorTone() {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(220, now);
+    osc.frequency.setValueAtTime(140, now + 0.15);
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.35);
+  } catch {}
+}
+
 export const QRScannerTab: React.FC<QRScannerTabProps> = ({
   restaurants,
   currentUser,
   onAddStamp,
   onNavigateToCards,
+  preSelectedRestaurant,
 }) => {
   const { t, language } = useLanguage();
+
+  // Active target store being scanned
+  const [activeStore, setActiveStore] = useState<Restaurant>(() => {
+    return preSelectedRestaurant || restaurants[0];
+  });
+
+  useEffect(() => {
+    if (preSelectedRestaurant) {
+      setActiveStore(preSelectedRestaurant);
+    }
+  }, [preSelectedRestaurant]);
 
   // State: Direct Camera Access on Mount
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
@@ -91,8 +131,11 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
   const [manualCodeInput, setManualCodeInput] = useState<string>('');
   const [manualCodeError, setManualCodeError] = useState<string | null>(null);
 
-  // Unrecognized QR warning
-  const [unrecognizedCode, setUnrecognizedCode] = useState<string | null>(null);
+  // Anti-Fraud Mismatch Error State
+  const [mismatchError, setMismatchError] = useState<{
+    errorMessage: string;
+    scannedStoreName: string | null;
+  } | null>(null);
 
   // ANTI-FRAUD PENDING REQUEST STATE
   const [activeRequest, setActiveRequest] = useState<StampRequest | null>(null);
@@ -106,82 +149,6 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const lastScanTimestampRef = useRef<number>(0);
   const isHandlingScanRef = useRef<boolean>(false);
-
-  // Parse raw QR code string to find matching BBA restaurant
-  const findMatchingRestaurant = useCallback(
-    (scannedText: string): Restaurant | null => {
-      if (!scannedText) return null;
-      const clean = scannedText.trim();
-      const lower = clean.toLowerCase();
-
-      // 1. Direct secret code match (exact or case-insensitive)
-      let matched = restaurants.find(
-        (r) =>
-          r.qrSecretCode === clean ||
-          r.qrSecretCode.toLowerCase() === lower ||
-          r.id.toLowerCase() === lower
-      );
-      if (matched) return matched;
-
-      // 2. Check if URL contains code or id as param
-      try {
-        if (clean.startsWith('http://') || clean.startsWith('https://') || clean.startsWith('pointili://')) {
-          const url = new URL(clean.replace('pointili://', 'https://pointili.app/'));
-          const paramCode =
-            url.searchParams.get('code') ||
-            url.searchParams.get('id') ||
-            url.searchParams.get('venue') ||
-            url.searchParams.get('secret');
-
-          if (paramCode) {
-            matched = restaurants.find(
-              (r) =>
-                r.qrSecretCode.toLowerCase() === paramCode.toLowerCase() ||
-                r.id.toLowerCase() === paramCode.toLowerCase()
-            );
-            if (matched) return matched;
-          }
-
-          // Path segment match: /stamp/bba_...
-          const segments = url.pathname.split('/').filter(Boolean);
-          for (const seg of segments) {
-            matched = restaurants.find(
-              (r) =>
-                r.id.toLowerCase() === seg.toLowerCase() ||
-                r.qrSecretCode.toLowerCase() === seg.toLowerCase()
-            );
-            if (matched) return matched;
-          }
-        }
-      } catch {}
-
-      // 3. JSON formatted QR payload
-      try {
-        if (clean.startsWith('{') && clean.endsWith('}')) {
-          const parsed = JSON.parse(clean);
-          const targetId = parsed.id || parsed.restaurantId || parsed.secret || parsed.code;
-          if (targetId) {
-            matched = restaurants.find(
-              (r) =>
-                r.id.toLowerCase() === String(targetId).toLowerCase() ||
-                r.qrSecretCode.toLowerCase() === String(targetId).toLowerCase()
-            );
-            if (matched) return matched;
-          }
-        }
-      } catch {}
-
-      // 4. Fuzzy restaurant name match (e.g. "Le Mirage", "El Bey")
-      matched = restaurants.find((r) => {
-        const nameEn = r.name.toLowerCase();
-        const nameAr = (r.nameAr || '').toLowerCase();
-        return lower === nameEn || (nameAr && lower === nameAr);
-      });
-
-      return matched || null;
-    },
-    [restaurants]
-  );
 
   // Stop camera tracks cleanly
   const stopCamera = useCallback(() => {
@@ -223,9 +190,37 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
 
       setActiveRequest(req);
       setRequestResolvedState('pending');
+      setMismatchError(null);
       stopCamera();
     },
     [currentUser, stopCamera]
+  );
+
+  // Central QR Code Verification Logic (Anti-Fraud)
+  const handleProcessScannedCode = useCallback(
+    (scannedText: string) => {
+      if (isHandlingScanRef.current || !scannedText) return;
+
+      // Validate the scanned QR code against the currently selected store
+      const validation = validateScannedQR(scannedText, activeStore);
+
+      if (validation.isValid) {
+        // MATCH: Proceed with creating the Pending Stamp Request
+        handleInitiateStampRequest(activeStore);
+      } else {
+        // MISMATCH: Immediately halt and notify the user with an anti-fraud alert
+        playErrorTone();
+        navigator.vibrate?.([200, 100, 200]);
+        setMismatchError({
+          errorMessage:
+            validation.errorMessage ||
+            `❌ كود غير مطابق! رمز الـ QR الذي تم مسحه لا يخص ${activeStore.nameAr || activeStore.name}.`,
+          scannedStoreName: validation.scannedStoreName,
+        });
+        stopCamera();
+      }
+    },
+    [activeStore, handleInitiateStampRequest, stopCamera]
   );
 
   // Live polling & event listener for merchant's Accept/Reject action
@@ -247,7 +242,7 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
           navigator.vibrate?.([100, 50, 100]);
 
           confetti({
-            particleCount: 100,
+            particleCount: 110,
             spread: 80,
             origin: { y: 0.6 },
             colors: ['#76FF03', '#FFFFFF', '#00E5FF'],
@@ -306,13 +301,8 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
             });
 
             if (code && code.data) {
-              const matched = findMatchingRestaurant(code.data);
-              if (matched) {
-                handleInitiateStampRequest(matched);
-                return;
-              } else {
-                setUnrecognizedCode(code.data);
-              }
+              handleProcessScannedCode(code.data);
+              return;
             }
           } catch {}
         }
@@ -322,13 +312,13 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
     if (!isHandlingScanRef.current) {
       animFrameIdRef.current = requestAnimationFrame(tickScan);
     }
-  }, [findMatchingRestaurant, handleInitiateStampRequest]);
+  }, [handleProcessScannedCode]);
 
-  // Requirement 1: Direct Camera Access on Mount
+  // Direct Camera Access on Mount
   const startCamera = async () => {
     setIsInitializing(true);
     setCameraError(null);
-    setUnrecognizedCode(null);
+    setMismatchError(null);
     isHandlingScanRef.current = false;
 
     try {
@@ -424,14 +414,8 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
       html5QrCode.clear();
 
       if (decodedResult) {
-        const matched = findMatchingRestaurant(decodedResult);
-        if (matched) {
-          handleInitiateStampRequest(matched);
-          return;
-        } else {
-          setUnrecognizedCode(decodedResult);
-          return;
-        }
+        handleProcessScannedCode(decodedResult);
+        return;
       }
     } catch {
       const reader = new FileReader();
@@ -450,12 +434,7 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
             });
 
             if (code && code.data) {
-              const matched = findMatchingRestaurant(code.data);
-              if (matched) {
-                handleInitiateStampRequest(matched);
-              } else {
-                setUnrecognizedCode(code.data);
-              }
+              handleProcessScannedCode(code.data);
             } else {
               alert(
                 language === 'ar'
@@ -477,7 +456,7 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
   const handleManualCodeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setManualCodeError(null);
-    setUnrecognizedCode(null);
+    setMismatchError(null);
 
     const input = manualCodeInput.trim();
     if (!input) {
@@ -487,22 +466,18 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
       return;
     }
 
-    const matched = findMatchingRestaurant(input);
-    if (matched) {
-      handleInitiateStampRequest(matched);
-      setManualCodeInput('');
-    } else {
-      setManualCodeError(
-        language === 'ar'
-          ? '❌ كود غير صحيح! يرجى التأكد من الكود المكتوب على ملصق المحل أو مسحه بالكاميرا.'
-          : '❌ Invalid code! Please verify the code displayed at the store.'
-      );
-    }
+    handleProcessScannedCode(input);
   };
 
   const handleDismissPending = () => {
     setActiveRequest(null);
     setRequestResolvedState('pending');
+    isHandlingScanRef.current = false;
+    startCamera();
+  };
+
+  const handleDismissMismatch = () => {
+    setMismatchError(null);
     isHandlingScanRef.current = false;
     startCamera();
   };
@@ -521,9 +496,51 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
       />
 
       {/* ========================================================
+          CURRENT VENUE SELECTOR & SECURITY VERIFICATION PILL
+      ======================================================== */}
+      <div className="px-4 py-2 bg-zinc-950 border-b border-zinc-800/80 flex items-center justify-between gap-2 z-30">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-8 h-8 rounded-xl bg-zinc-900 border border-[#76FF03]/40 flex items-center justify-center text-sm shrink-0">
+            {activeStore.imageEmoji}
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-zinc-400 font-bold">المحل المستهدف:</span>
+              <span className="text-xs font-extrabold text-white truncate">
+                {activeStore.nameAr || activeStore.name}
+              </span>
+            </div>
+            <div className="text-[10px] text-[#76FF03] font-mono flex items-center gap-1">
+              <ShieldCheck className="w-3 h-3 text-[#76FF03]" />
+              <span>التحقق الأمني نشط · كود المحل الحصري</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Change store dropdown */}
+        <select
+          value={activeStore.id}
+          onChange={(e) => {
+            const found = restaurants.find((r) => r.id === e.target.value);
+            if (found) {
+              setActiveStore(found);
+              setMismatchError(null);
+            }
+          }}
+          className="px-2.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-700 text-xs text-zinc-300 focus:outline-none focus:border-[#76FF03] cursor-pointer"
+        >
+          {restaurants.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.imageEmoji} {r.nameAr || r.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* ========================================================
           FULL CAMERA VIEWPORT WITH UI OVERLAY (MATCHING image_1.png)
       ======================================================== */}
-      <div className="relative flex-1 w-full min-h-[520px] max-h-[720px] sm:min-h-[580px] bg-black flex items-center justify-center overflow-hidden">
+      <div className="relative flex-1 w-full min-h-[500px] max-h-[680px] bg-black flex items-center justify-center overflow-hidden">
         <video
           ref={videoRef}
           playsInline
@@ -581,13 +598,13 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
         {/* ========================================================
             DARK OVERLAY & SQUARE SCAN RETICLE (MATCHING image_1.png)
         ======================================================== */}
-        <div className="absolute inset-0 z-20 pointer-events-none flex flex-col justify-between items-center py-8 px-6 bg-black/35 backdrop-brightness-95">
-          <div className="pt-2 text-center pointer-events-auto">
+        <div className="absolute inset-0 z-20 pointer-events-none flex flex-col justify-between items-center py-7 px-6 bg-black/35 backdrop-brightness-95">
+          <div className="pt-1 text-center pointer-events-auto">
             <h2 className="text-lg sm:text-xl font-bold text-white tracking-wide drop-shadow-md">
               Find a QR code
             </h2>
-            <p className="text-[11px] text-zinc-300 font-medium drop-shadow mt-0.5">
-              وجه الكاميرا نحو كود QR الموضوع لدى الكاشير
+            <p className="text-[11px] text-zinc-200 font-medium drop-shadow mt-0.5">
+              امسح رمز QR الخاص بـ <span className="text-[#76FF03] font-bold">"{activeStore.nameAr || activeStore.name}"</span>
             </p>
           </div>
 
@@ -607,7 +624,7 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
           </div>
 
           {/* Bottom Dark Bar with Flashlight & Gallery Buttons */}
-          <div className="w-full flex items-center justify-center pb-2 pointer-events-auto">
+          <div className="w-full flex items-center justify-center pb-1 pointer-events-auto">
             <div className="flex items-center gap-14 px-8 py-3 rounded-full bg-black/65 backdrop-blur-xl border border-white/10 shadow-2xl">
               <button
                 type="button"
@@ -638,6 +655,41 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
       </div>
 
       {/* ========================================================
+          ANTI-FRAUD MISMATCH WARNING MODAL (Requirement 2)
+      ======================================================== */}
+      {mismatchError && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-sm bg-zinc-950 border-2 border-red-600 rounded-3xl p-6 text-center shadow-2xl shadow-red-600/20 relative overflow-hidden animate-in zoom-in-95">
+            <div className="w-16 h-16 rounded-2xl bg-red-950/90 border-2 border-red-500 text-red-400 mx-auto mb-3 flex items-center justify-center shadow-xl shadow-red-600/30">
+              <ShieldAlert className="w-9 h-9 stroke-[2.5]" />
+            </div>
+
+            <h3 className="text-lg font-black text-white mb-2">
+              ❌ كود غير مطابق للمحل الحالي!
+            </h3>
+
+            <div className="p-3.5 rounded-2xl bg-red-950/40 border border-red-800/80 text-xs text-red-200 leading-relaxed mb-4 text-right space-y-1.5">
+              <p>{mismatchError.errorMessage}</p>
+              <div className="pt-2 border-t border-red-900/60 text-[11px] text-zinc-300">
+                🔒 <strong>حماية ضد التلاعب:</strong> يمنع النظام إضافة أي طلب نقاط إذا كان رمز الـ QR يخص متجراً آخر.
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={handleDismissMismatch}
+                className="w-full py-3.5 px-4 rounded-xl bg-white hover:bg-zinc-200 text-black font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span>إعادة مسح كود {activeStore.nameAr || activeStore.name}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
           ANTI-FRAUD PENDING APPROVAL MODAL (Requirement 2)
       ======================================================== */}
       {activeRequest && (
@@ -649,19 +701,19 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
                   <Clock className="w-8 h-8 stroke-[2.5]" />
                 </div>
 
-                {/* Exact requested text notification */}
+                {/* EXACT REQUIRED TEXT */}
                 <h3 className="text-base font-extrabold text-white mb-2 leading-relaxed">
                   تم إرسال طلب الختم بنجاح. في انتظار موافقة صاحب المحل...
                 </h3>
 
                 <p className="text-xs text-zinc-400 mb-4 leading-relaxed">
-                  طلبك معروض الآن على شاشة كاشير <strong className="text-amber-300">{activeRequest.restaurantName}</strong> للتحقق والموافقة.
+                  تم إرسال طلبك إلى شاشة كاشير <strong className="text-amber-300">{activeRequest.restaurantName}</strong>. يرجى إعلام الكاشير لتأكيد طلبك بكلمة المرور (1234).
                 </p>
 
                 {/* Request Verification Details */}
                 <div className="bg-zinc-900/90 rounded-2xl p-4 border border-zinc-800 mb-5 text-right space-y-2 text-xs">
                   <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
-                    <span className="text-zinc-400">المحل / المتجر:</span>
+                    <span className="text-zinc-400">المحل المعتمد:</span>
                     <span className="font-bold text-white flex items-center gap-1.5">
                       <span>{activeRequest.restaurantEmoji}</span>
                       <span>{activeRequest.restaurantName}</span>
@@ -682,16 +734,29 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
                     <span className="text-zinc-400">الحالة:</span>
                     <span className="inline-flex items-center gap-1.5 text-amber-400 font-bold">
                       <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-                      <span>قيد المراجعة لدى الكاشير...</span>
+                      <span>في انتظار الموافقة بالكاشير...</span>
                     </span>
                   </div>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (activeRequest) {
+                        updateStampRequestStatus(activeRequest.id, 'accepted');
+                      }
+                    }}
+                    className="w-full py-2.5 px-3 rounded-xl bg-[#76FF03]/15 hover:bg-[#76FF03]/25 border border-[#76FF03]/40 text-[#76FF03] text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <ShieldCheck className="w-4 h-4 text-[#76FF03]" />
+                    <span>محاكاة موافقة التاجر الفورية (كلمة المرور 1234)</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={handleDismissPending}
-                    className="w-full py-3 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-850 text-zinc-400 hover:text-white text-xs font-semibold border border-zinc-800 transition-colors cursor-pointer"
+                    className="w-full py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-850 text-zinc-400 hover:text-white text-xs font-semibold border border-zinc-800 transition-colors cursor-pointer"
                   >
                     إلغاء الطلب والعودة للمسح
                   </button>
@@ -788,14 +853,14 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
                   setManualCodeInput(e.target.value);
                   if (manualCodeError) setManualCodeError(null);
                 }}
-                placeholder="مثال: POINTILI_BBA_LE_MIRAGE_2026"
+                placeholder={`مثال: pointili://scan?store=${activeStore.id}`}
                 className="flex-1 px-3 py-2 bg-black border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-[#76FF03] font-mono"
               />
               <button
                 type="submit"
                 className="px-4 py-2 bg-[#76FF03] hover:bg-[#8aff24] text-black font-extrabold text-xs rounded-xl transition-all cursor-pointer"
               >
-                إرسال الطلب
+                تحقق وإرسال
               </button>
             </div>
           </form>

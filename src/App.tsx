@@ -115,6 +115,7 @@ export default function App() {
   // Navigation & Modals State
   const [currentTab, setCurrentTab] = useState<NavTab>('cards');
   const [cardForDetail, setCardForDetail] = useState<Restaurant | null>(null);
+  const [scannedTargetRestaurant, setScannedTargetRestaurant] = useState<Restaurant | null>(null);
   const [cardForRedemption, setCardForRedemption] = useState<Restaurant | null>(null);
   const [merchantQROpen, setMerchantQROpen] = useState<boolean>(false);
   const [discoverModalOpen, setDiscoverModalOpen] = useState<boolean>(false);
@@ -437,6 +438,7 @@ export default function App() {
               onSelectRestaurant={(r) => setCardForDetail(r)}
               onRedeemReward={(r) => setCardForRedemption(r)}
               onQuickScan={(r) => {
+                setScannedTargetRestaurant(r);
                 setCardForDetail(null);
                 setCurrentTab('scanner');
               }}
@@ -453,7 +455,7 @@ export default function App() {
               currentUser={currentUser}
               onAddStamp={(id) => handleAddStamp(id)}
               onNavigateToCards={() => setCurrentTab('cards')}
-              preSelectedRestaurant={cardForDetail}
+              preSelectedRestaurant={scannedTargetRestaurant || cardForDetail}
             />
           )}
 
@@ -475,7 +477,9 @@ export default function App() {
         {/* Modern Mobile Bottom Navigation Bar */}
         <BottomNav
           currentTab={currentTab}
-          onChangeTab={(tab) => setCurrentTab(tab)}
+          onChangeTab={(tab) => {
+            setCurrentTab(tab);
+          }}
           unlockedRewardsCount={unlockedRewardsCount}
         />
 
@@ -484,6 +488,7 @@ export default function App() {
           restaurant={cardForDetail}
           onClose={() => setCardForDetail(null)}
           onScanStamp={(r) => {
+            setScannedTargetRestaurant(r);
             setCardForDetail(null);
             setCurrentTab('scanner');
           }}
