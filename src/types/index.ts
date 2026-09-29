@@ -28,6 +28,7 @@ export interface Restaurant {
   rewardTitle: string;
   rewardDescription: string;
   qrSecretCode: string;
+  uniqueCode?: string;
   totalRewardsClaimed: number;
   perks: string[];
   // Multilingual translations

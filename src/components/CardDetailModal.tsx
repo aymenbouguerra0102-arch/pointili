@@ -183,6 +183,11 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({
               <div className="text-[11px] text-zinc-400 font-mono mt-0.5" dir="ltr">
                 {qrInfo.payload}
               </div>
+              <div className="flex items-center justify-center gap-1.5 mt-1">
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-[#76FF03]/10 border border-[#76FF03]/30 text-[#76FF03]" dir="ltr">
+                  كود حصري: {qrInfo.uniqueCode}
+                </span>
+              </div>
 
               {/* ACTION BUTTONS: تحقق وأرسل + مسح بالكاميرا */}
               <div className="mt-3.5 flex gap-2">

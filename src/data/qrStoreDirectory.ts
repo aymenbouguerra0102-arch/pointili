@@ -2,17 +2,35 @@ export interface RegisteredQRStore {
   key: string;
   name: string;
   nameAr?: string;
+  uniqueCode: string;
   aliases: string[];
   qrImagePath: string;
   payload: string;
 }
+
+// قائمة المطاعم مع كود QR خاص وحصري لكل محل (Stores Database)
+export const storesDatabase = [
+  { id: "burger_house_34", name: "Burger HOUSE 34", uniqueCode: "POINTILI_QR_BURGER_HOUSE_34" },
+  { id: "217_fast_food", name: "217 (Fast Food)", uniqueCode: "POINTILI_QR_217_FAST_FOOD" },
+  { id: "pizzeria_antakya", name: "Pizzeria Antakya", uniqueCode: "POINTILI_QR_PIZZERIA_ANTAKYA" },
+  { id: "sparte_pizzeria", name: "Sparte Pizzeria", uniqueCode: "POINTILI_QR_SPARTE_PIZZERIA" },
+  { id: "pizzeria_savannah_34", name: "Pizzeria Savannah 34", uniqueCode: "POINTILI_QR_PIZZERIA_SAVANNAH_34" },
+  { id: "5_juillet_pizzeria", name: "5 juillet Pizzeria", uniqueCode: "POINTILI_QR_5_JUILLET_PIZZERIA" },
+  { id: "chiken_house", name: "Chiken house", uniqueCode: "POINTILI_QR_CHIKEN_HOUSE" },
+  { id: "34_food_fastfood", name: "34 Food Fastfood", uniqueCode: "POINTILI_QR_34_FOOD_FASTFOOD" },
+  { id: "belarbi_fast_food", name: "Belarbi Fast Food", uniqueCode: "POINTILI_QR_BELARBI_FAST_FOOD" },
+  { id: "rahim_cook", name: "Rahim cook", uniqueCode: "POINTILI_QR_RAHIM_COOK" }
+];
 
 export const OFFICIAL_10_QR_STORES: RegisteredQRStore[] = [
   {
     key: 'burger_house_34',
     name: 'Burger HOUSE 34',
     nameAr: 'برغر هاوس 34',
+    uniqueCode: 'POINTILI_QR_BURGER_HOUSE_34',
     aliases: [
+      'POINTILI_QR_BURGER_HOUSE_34',
+      'pointili_qr_burger_house_34',
       'burger_house_34',
       'bba_burger_house_34',
       'burger house 34',
@@ -28,7 +46,10 @@ export const OFFICIAL_10_QR_STORES: RegisteredQRStore[] = [
     key: '217_fast_food',
     name: '217 (Fast Food)',
     nameAr: '217 فاست فود',
+    uniqueCode: 'POINTILI_QR_217_FAST_FOOD',
     aliases: [
+      'POINTILI_QR_217_FAST_FOOD',
+      'pointili_qr_217_fast_food',
       '217_fast_food',
       'bba_217_fast_food',
       '217 (fast food)',
@@ -45,7 +66,10 @@ export const OFFICIAL_10_QR_STORES: RegisteredQRStore[] = [
     key: 'pizzeria_antakya',
     name: 'Pizzeria Antakya',
     nameAr: 'بيتزا أنطاكيا',
+    uniqueCode: 'POINTILI_QR_PIZZERIA_ANTAKYA',
     aliases: [
+      'POINTILI_QR_PIZZERIA_ANTAKYA',
+      'pointili_qr_pizzeria_antakya',
       'pizzeria_antakya',
       'bba_pizzeria_antakya',
       'pizzeria antakya',
@@ -60,7 +84,10 @@ export const OFFICIAL_10_QR_STORES: RegisteredQRStore[] = [
     key: 'sparte_pizzeria',
     name: 'Sparte Pizzeria',
     nameAr: 'سبارت بيتزا',
+    uniqueCode: 'POINTILI_QR_SPARTE_PIZZERIA',
     aliases: [
+      'POINTILI_QR_SPARTE_PIZZERIA',
+      'pointili_qr_sparte_pizzeria',
       'sparte_pizzeria',
       'bba_sparte_pizzeria',
       'sparte pizzeria',
@@ -75,7 +102,10 @@ export const OFFICIAL_10_QR_STORES: RegisteredQRStore[] = [
     key: 'pizzeria_savannah_34',
     name: 'Pizzeria Savannah 34',
     nameAr: 'بيتزا سافانا 34',
+    uniqueCode: 'POINTILI_QR_PIZZERIA_SAVANNAH_34',
     aliases: [
+      'POINTILI_QR_PIZZERIA_SAVANNAH_34',
+      'pointili_qr_pizzeria_savannah_34',
       'pizzeria_savannah_34',
       'bba_pizzeria_savannah',
       'bba_pizzeria_savannah_34',
@@ -93,7 +123,10 @@ export const OFFICIAL_10_QR_STORES: RegisteredQRStore[] = [
     key: '5_juillet_pizzeria',
     name: '5 juillet Pizzeria',
     nameAr: 'بيتزا 5 جويلية',
+    uniqueCode: 'POINTILI_QR_5_JUILLET_PIZZERIA',
     aliases: [
+      'POINTILI_QR_5_JUILLET_PIZZERIA',
+      'pointili_qr_5_juillet_pizzeria',
       '5_juillet_pizzeria',
       'bba_5_juillet_pizzeria',
       '5 juillet pizzeria',
@@ -110,7 +143,10 @@ export const OFFICIAL_10_QR_STORES: RegisteredQRStore[] = [
     key: 'chiken_house',
     name: 'Chiken house',
     nameAr: 'تشيكن هاوس',
+    uniqueCode: 'POINTILI_QR_CHIKEN_HOUSE',
     aliases: [
+      'POINTILI_QR_CHIKEN_HOUSE',
+      'pointili_qr_chiken_house',
       'chiken_house',
       'bba_chicken_house',
       'chicken_house',
@@ -126,7 +162,10 @@ export const OFFICIAL_10_QR_STORES: RegisteredQRStore[] = [
     key: '34_food_fastfood',
     name: '34 Food Fastfood',
     nameAr: '34 فود فاست فود',
+    uniqueCode: 'POINTILI_QR_34_FOOD_FASTFOOD',
     aliases: [
+      'POINTILI_QR_34_FOOD_FASTFOOD',
+      'pointili_qr_34_food_fastfood',
       '34_food_fastfood',
       'bba_34_food',
       '34 food fastfood',
@@ -143,7 +182,10 @@ export const OFFICIAL_10_QR_STORES: RegisteredQRStore[] = [
     key: 'belarbi_fast_food',
     name: 'Belarbi Fast Food',
     nameAr: 'بلعربي فاست فود',
+    uniqueCode: 'POINTILI_QR_BELARBI_FAST_FOOD',
     aliases: [
+      'POINTILI_QR_BELARBI_FAST_FOOD',
+      'pointili_qr_belarbi_fast_food',
       'belarbi_fast_food',
       'bba_belarbi_fast_food',
       'belarbi fast food',
@@ -158,7 +200,10 @@ export const OFFICIAL_10_QR_STORES: RegisteredQRStore[] = [
     key: 'rahim_cook',
     name: 'Rahim cook',
     nameAr: 'رحيم كوك',
+    uniqueCode: 'POINTILI_QR_RAHIM_COOK',
     aliases: [
+      'POINTILI_QR_RAHIM_COOK',
+      'pointili_qr_rahim_cook',
       'rahim_cook',
       'bba_rahim_cook',
       'rahim cook',
@@ -191,6 +236,8 @@ export function getStoreQRInfo(
   for (const store of OFFICIAL_10_QR_STORES) {
     if (
       store.key === cleanId ||
+      store.uniqueCode.toLowerCase() === cleanId ||
+      store.uniqueCode.toLowerCase() === cleanName ||
       store.name.toLowerCase() === cleanName ||
       (cleanNameAr && store.nameAr && store.nameAr.toLowerCase() === cleanNameAr) ||
       store.aliases.some(
@@ -254,16 +301,31 @@ export function extractStoreIdFromQRPayload(scannedText: string): string | null 
     } catch {}
   }
 
-  // 4. POINTILI_BBA_... secret code format
+  // 4. POINTILI_QR_... exclusive store code format
+  if (raw.toUpperCase().startsWith('POINTILI_QR_')) {
+    const cleanKey = raw.toUpperCase().replace('POINTILI_QR_', '').toLowerCase();
+    for (const store of OFFICIAL_10_QR_STORES) {
+      if (store.key === cleanKey || store.uniqueCode.toUpperCase() === raw.toUpperCase()) {
+        return store.key;
+      }
+    }
+    return cleanKey;
+  }
+
+  // 5. POINTILI_BBA_... secret code format
   if (raw.startsWith('POINTILI_BBA_')) {
     const key = raw.replace('POINTILI_BBA_', '').replace('_2026', '').toLowerCase();
     return key;
   }
 
-  // 5. Direct key match among official 10 stores
+  // 6. Direct key match among official 10 stores
   const clean = raw.toLowerCase();
   for (const store of OFFICIAL_10_QR_STORES) {
-    if (store.key === clean || store.aliases.some((a) => a.toLowerCase() === clean)) {
+    if (
+      store.key === clean ||
+      store.uniqueCode.toLowerCase() === clean ||
+      store.aliases.some((a) => a.toLowerCase() === clean)
+    ) {
       return store.key;
     }
   }

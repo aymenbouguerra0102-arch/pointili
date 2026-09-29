@@ -137,6 +137,12 @@ export const MerchantQRSheet: React.FC<MerchantQRSheetProps> = ({
         {qrInfo && (
           <div className="p-3 rounded-2xl bg-zinc-900/90 border border-zinc-800 mb-3 text-left">
             <div className="flex items-center justify-between text-[11px] text-zinc-400 mb-1">
+              <span className="font-semibold text-zinc-300">كود المحل الحصري (Unique Code):</span>
+              <span className="text-[#76FF03] font-mono text-[11px] font-bold">
+                {qrInfo.uniqueCode}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-zinc-400 mb-1">
               <span className="font-semibold text-zinc-300">محتوى الكود المشفر (Payload):</span>
               <button
                 onClick={handleCopyCode}
