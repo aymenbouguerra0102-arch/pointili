@@ -18,6 +18,7 @@ import {
   createGoogleUserProfile,
   maskEmail,
 } from '../utils/googleAuthService';
+import confetti from 'canvas-confetti';
 
 interface AuthScreenProps {
   onLogin: (user: UserProfile) => void;
@@ -28,6 +29,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onOpenAdminLogi
   const { t, language } = useLanguage();
   const [savedUserEmail, setSavedUserEmail] = useState<string | null>(null);
   const [savedUserName, setSavedUserName] = useState<string | null>(null);
+  const [showThankYou, setShowThankYou] = useState<boolean>(false);
+  const [thankYouUserName, setThankYouUserName] = useState<string>('');
+  const [pendingProfile, setPendingProfile] = useState<UserProfile | null>(null);
   const googleBtnContainerRef = useRef<HTMLDivElement>(null);
 
   // Check if returning Google user exists in localStorage
@@ -41,6 +45,18 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onOpenAdminLogi
       }
     } catch {}
   }, []);
+
+  const closeThankYouModal = () => {
+    setShowThankYou(false);
+    if (pendingProfile) {
+      onLogin(pendingProfile);
+    }
+  };
+
+  // Expose global function for external or inline triggers
+  useEffect(() => {
+    (window as any).closeThankYouModal = closeThankYouModal;
+  }, [pendingProfile]);
 
   // Initialize official Google Identity Services & attach global callback
   useEffect(() => {
@@ -66,7 +82,17 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onOpenAdminLogi
             sub: userInfo.sub,
           });
 
-          onLogin(profile);
+          // عرض نافذة الشكر والترحيب المخصصة
+          setPendingProfile(profile);
+          setThankYouUserName(userInfo.name || 'مستخدم');
+          setShowThankYou(true);
+
+          confetti({
+            particleCount: 50,
+            spread: 65,
+            origin: { y: 0.5 },
+            colors: ['#22c55e', '#76FF03', '#ffffff'],
+          });
         }
       }
     };
@@ -122,7 +148,15 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onOpenAdminLogi
       email: savedUserEmail,
       name: savedUserName || undefined,
     });
-    onLogin(profile);
+    setPendingProfile(profile);
+    setThankYouUserName(savedUserName || 'مستخدم');
+    setShowThankYou(true);
+    confetti({
+      particleCount: 45,
+      spread: 60,
+      origin: { y: 0.5 },
+      colors: ['#22c55e', '#76FF03', '#ffffff'],
+    });
   };
 
   return (
@@ -325,6 +359,45 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onOpenAdminLogi
           <span>{t.adminPortal}</span>
         </button>
       </footer>
+
+      {/* نافذة رسالة الشكر والترحيب بعد تسجيل الدخول */}
+      {showThankYou && (
+        <div
+          id="thankYouModal"
+          className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/85 backdrop-blur-[5px] animate-in fade-in duration-200 select-none font-['Plus_Jakarta_Sans']"
+          onClick={closeThankYouModal}
+        >
+          <div
+            className="modal-card relative bg-[#1a1a1a] border border-[#333] rounded-[20px] p-[30px_20px] text-center max-w-[330px] w-[90%] shadow-[0_10px_30px_rgba(0,0,0,0.6)] animate-in zoom-in-95 duration-250"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Ambient light glow */}
+            <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-28 h-28 bg-[#22c55e]/20 rounded-full blur-2xl pointer-events-none" />
+
+            <div className="modal-icon text-[50px] mb-[15px] select-none animate-bounce">
+              🙏
+            </div>
+
+            <h2 className="text-[#22c55e] text-[20px] font-black mb-[10px] tracking-tight">
+              شكراً لك على انضمامك!
+            </h2>
+
+            <p id="thankYouText" className="text-[#aaa] text-[13px] leading-[1.6] mb-[20px] font-medium">
+              أهلاً بك يا <strong className="text-white font-extrabold">{thankYouUserName}</strong>!<br />
+              شكراً لك على تسجيل الدخول بحسابك. سعدنا بانضمامك إلى عائلة Pointili في برج بوعريريج والمنصورة.
+            </p>
+
+            <button
+              type="button"
+              className="modal-btn w-full py-[12px] rounded-[25px] bg-[#22c55e] hover:bg-[#16a34a] text-black font-black text-[14px] flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 shadow-lg shadow-[#22c55e]/25 border border-[#22c55e]"
+              onClick={closeThankYouModal}
+            >
+              <span>متابعة إلى التطبيق</span>
+              <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
