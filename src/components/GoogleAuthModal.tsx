@@ -33,8 +33,20 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
   onLogin,
 }) => {
   const { language } = useLanguage();
-  const [emailInput, setEmailInput] = useState('aymenbouguerra0102@gmail.com');
-  const [nicknameInput, setNicknameInput] = useState('Aymen BG');
+  const [emailInput, setEmailInput] = useState<string>(() => {
+    try {
+      return localStorage.getItem('user_email') || 'aymenbouguerra0102@gmail.com';
+    } catch {
+      return 'aymenbouguerra0102@gmail.com';
+    }
+  });
+  const [nicknameInput, setNicknameInput] = useState<string>(() => {
+    try {
+      return localStorage.getItem('user_name') || 'Aymen BG';
+    } catch {
+      return 'Aymen BG';
+    }
+  });
   const [hideEmail, setHideEmail] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const googleBtnRef = useRef<HTMLDivElement>(null);

@@ -1,5 +1,9 @@
 import { UserProfile } from '../types';
 
+export const OFFICIAL_GOOGLE_CLIENT_ID =
+  (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_GOOGLE_CLIENT_ID ||
+  '1043668200753-n9veclikvkeelm5988ncj9c6jrc5ds5l.apps.googleusercontent.com';
+
 /**
  * Mask email address to hide identity in public views
  * Example: aymenbouguerra0102@gmail.com -> aym***@gmail.com
@@ -30,9 +34,9 @@ export function generateGoogleAnonymousCode(seed: string): string {
 }
 
 /**
- * Decode JWT credential returned by Google Identity Services (GIS)
+ * Parse JWT credential returned by Google Identity Services (GIS)
  */
-export function decodeGoogleJwt(token: string): {
+export function parseJwt(token: string): {
   sub?: string;
   email?: string;
   name?: string;
@@ -45,7 +49,8 @@ export function decodeGoogleJwt(token: string): {
     const base64Url = parts[1];
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
     const jsonPayload = decodeURIComponent(
-      atob(base64)
+      window
+        .atob(base64)
         .split('')
         .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
         .join('')
@@ -56,6 +61,11 @@ export function decodeGoogleJwt(token: string): {
     return null;
   }
 }
+
+/**
+ * Alias for decodeGoogleJwt
+ */
+export const decodeGoogleJwt = parseJwt;
 
 /**
  * Construct UserProfile from Google credentials with full privacy shielding
@@ -72,13 +82,22 @@ export function createGoogleUserProfile(params: {
   const masked = maskEmail(email);
 
   // If user provided a custom nickname, use it, otherwise use Google name or masked display
-  const displayName = customNickname?.trim() || name || `مستخدم Google (${anonCode})`;
+  const displayName = customNickname?.trim() || name || `زبون Google (${anonCode})`;
 
   const avatarUrl =
     picture ||
     `https://ui-avatars.com/api/?name=${encodeURIComponent(
       displayName
     )}&background=76FF03&color=000000&bold=true&rounded=true&size=200`;
+
+  // Safely persist to localStorage as requested:
+  // حفظ بيانات المستخدم محلياً بأمان تام دون إظهارها للعامة
+  try {
+    localStorage.setItem('user_email', email);
+    if (displayName) {
+      localStorage.setItem('user_name', displayName);
+    }
+  } catch {}
 
   return {
     id: `usr_g_${sub ? sub.slice(0, 12) : anonCode.toLowerCase().replace(/-/g, '_')}`,
@@ -108,23 +127,45 @@ export function initGoogleIdentityServices(
 ): boolean {
   if (typeof window === 'undefined') return false;
 
-  const clientId =
-    (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_GOOGLE_CLIENT_ID ||
-    '798728501590-pointili-bba.apps.googleusercontent.com';
+  const clientId = OFFICIAL_GOOGLE_CLIENT_ID;
 
-  const google = (window as unknown as { google?: { accounts?: { id: {
-    initialize: (config: any) => void;
-    renderButton: (parent: HTMLElement, options: any) => void;
-    prompt: () => void;
-  } } } }).google;
+  // Register global handleCredentialResponse callback so HTML tags also work
+  (window as unknown as {
+    handleCredentialResponse?: (response: { credential: string }) => void;
+  }).handleCredentialResponse = (response: { credential: string }) => {
+    if (response && response.credential) {
+      const userInfo = parseJwt(response.credential);
+      if (userInfo && userInfo.email) {
+        const profile = createGoogleUserProfile({
+          email: userInfo.email,
+          name: userInfo.name,
+          picture: userInfo.picture,
+          sub: userInfo.sub,
+        });
+        onSuccess(profile);
+      }
+    }
+  };
+
+  const google = (window as unknown as {
+    google?: {
+      accounts?: {
+        id: {
+          initialize: (config: any) => void;
+          renderButton: (parent: HTMLElement, options: any) => void;
+          prompt: () => void;
+        };
+      };
+    };
+  }).google;
 
   if (google?.accounts?.id) {
     try {
       google.accounts.id.initialize({
         client_id: clientId,
         callback: (response: { credential?: string }) => {
-          if (response.credential) {
-            const decoded = decodeGoogleJwt(response.credential);
+          if (response?.credential) {
+            const decoded = parseJwt(response.credential);
             if (decoded && decoded.email) {
               const profile = createGoogleUserProfile({
                 email: decoded.email,

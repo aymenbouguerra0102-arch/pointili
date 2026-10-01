@@ -27,6 +27,7 @@ import { AppUpdateBanner } from './components/AppUpdateBanner';
 import { AppUpdateModal } from './components/AppUpdateModal';
 import { NotificationsModal } from './components/NotificationsModal';
 import { markAppAsInstalled } from './services/appUpdateService';
+import { createGoogleUserProfile } from './utils/googleAuthService';
 import confetti from 'canvas-confetti';
 
 const STORAGE_KEY_AUTH = 'pointili_auth_user_v1';
@@ -63,24 +64,24 @@ export default function App() {
   });
   const [showAdminLogin, setShowAdminLogin] = useState<boolean>(false);
 
-  // Customer Auth State - Private Anonymous or Nickname Access
+  // Customer Auth State - Real Google Sign-In with Full Privacy Protection
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_AUTH);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && parsed.id) {
-          // Sanitize old test accounts with real emails
-          if (
-            parsed.email?.includes('aymenbouguerra') ||
-            parsed.email?.includes('alex.rivera') ||
-            parsed.id === 'usr_pointili_882'
-          ) {
-            localStorage.removeItem(STORAGE_KEY_AUTH);
-            return null;
-          }
           return parsed;
         }
+      }
+      // Check if user previously logged in via Google (user_email / user_name)
+      const savedEmail = localStorage.getItem('user_email');
+      const savedName = localStorage.getItem('user_name');
+      if (savedEmail) {
+        return createGoogleUserProfile({
+          email: savedEmail,
+          name: savedName || undefined,
+        });
       }
       return null;
     } catch {
