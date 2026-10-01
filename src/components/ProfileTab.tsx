@@ -282,6 +282,28 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
           </button>
         )}
 
+        {/* Welcome Message Preview Row */}
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('pointili:open-welcome-modal'))}
+          className="w-full p-3 flex items-center justify-between text-left hover:bg-zinc-850 rounded-xl transition-colors cursor-pointer group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-zinc-800 flex items-center justify-center text-zinc-300 group-hover:text-[#22c55e] transition-colors text-base">
+              🎉
+            </div>
+            <div>
+              <div className="text-xs font-bold text-white group-hover:text-[#22c55e] transition-colors flex items-center gap-1.5">
+                <span>رسالة الترحيب بـ Pointili</span>
+                <span className="text-[10px] text-[#22c55e]">جديد</span>
+              </div>
+              <div className="text-[11px] text-zinc-400">
+                عرض رسالة الترحيب بنظام ولاء مطاعم برج بوعريريج والمنصورة
+              </div>
+            </div>
+          </div>
+          <ChevronRight className="w-4 h-4 text-zinc-500" />
+        </button>
+
         {/* Secure Admin Portal Button */}
         <button
           onClick={onOpenAdminLogin}

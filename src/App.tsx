@@ -26,6 +26,7 @@ import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { AppUpdateBanner } from './components/AppUpdateBanner';
 import { AppUpdateModal } from './components/AppUpdateModal';
 import { NotificationsModal } from './components/NotificationsModal';
+import { WelcomeModal } from './components/WelcomeModal';
 import { markAppAsInstalled } from './services/appUpdateService';
 import { createGoogleUserProfile } from './utils/googleAuthService';
 import confetti from 'canvas-confetti';
@@ -568,6 +569,9 @@ export default function App() {
           onClose={() => setShowNotificationsModal(false)}
           onOpenUpdateDetails={() => setShowUpdateModal(true)}
         />
+
+        {/* First Time Visitor Welcome Modal */}
+        <WelcomeModal />
       </div>
     </div>
   );
