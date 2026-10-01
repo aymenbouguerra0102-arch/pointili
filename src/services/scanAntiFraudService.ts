@@ -6,10 +6,88 @@ import {
 } from '../data/adminMockData';
 import { getStampRequests } from '../data/stampRequestsManager';
 
-export const SCAN_COOLDOWN_SECONDS = 60; // 1 minute anti-fraud window
-export const SCAN_COOLDOWN_MS = SCAN_COOLDOWN_SECONDS * 1000;
+export const SCAN_COOLDOWN_SECONDS = 3600; // 1 hour (60 minutes) anti-fraud window per restaurant
+export const ONE_HOUR_MS = 60 * 60 * 1000; // ساعة كاملة بالمللي ثانية (3,600,000 ms)
+export const SCAN_COOLDOWN_MS = ONE_HOUR_MS;
 
 const STORAGE_KEY_DEVICE_ID = 'pointili_device_id_v2';
+
+/**
+ * دالة التحقق من وقت المسح (تطبق على كل مطعم بشكل منفصل)
+ * منع المسح المتتالي لنفس المطعم إلا بعد مرور ساعة كاملة (60 دقيقة)
+ */
+export interface StoreScanCheckResult {
+  allowed: boolean;
+  remainingMinutes?: number;
+  remainingSeconds?: number;
+}
+
+export function canUserScanStore(storeId: string): StoreScanCheckResult {
+  const lastScanKey = `last_scan_store_${storeId}`;
+  const lastScanTime = localStorage.getItem(lastScanKey) || localStorage.getItem(`last_scan_${storeId}`);
+
+  if (!lastScanTime) {
+    return { allowed: true }; // لم يقم بمسح هذا المطعم من قبل
+  }
+
+  const currentTime = new Date().getTime();
+  const timeDifference = currentTime - parseInt(lastScanTime, 10);
+  const oneHourInMs = ONE_HOUR_MS;
+
+  if (timeDifference < oneHourInMs) {
+    const remainingMinutes = Math.ceil((oneHourInMs - timeDifference) / (60 * 1000));
+    const remainingSeconds = Math.ceil((oneHourInMs - timeDifference) / 1000);
+    return {
+      allowed: false,
+      remainingMinutes: remainingMinutes,
+      remainingSeconds: remainingSeconds,
+    };
+  }
+
+  return { allowed: true }; // مر أكثر من ساعة على آخر زيارة لهذا المطعم تحديداً
+}
+
+/**
+ * دالة التحقق من وقت المسح بناءً على توقيت المسح الأخير
+ */
+export function canUserScanNow(lastScanTimestamp: number | null): StoreScanCheckResult {
+  if (!lastScanTimestamp) {
+    return { allowed: true }; // إذا لم يقم بالمسح من قبل، يُسمح له فوراً
+  }
+
+  const currentTime = new Date().getTime();
+  const timeDifference = currentTime - lastScanTimestamp;
+  const oneHourInMs = ONE_HOUR_MS;
+
+  if (timeDifference < oneHourInMs) {
+    const remainingMinutes = Math.ceil((oneHourInMs - timeDifference) / (60 * 1000));
+    const remainingSeconds = Math.ceil((oneHourInMs - timeDifference) / 1000);
+    return {
+      allowed: false,
+      remainingMinutes: remainingMinutes,
+      remainingSeconds: remainingSeconds,
+    };
+  }
+
+  return { allowed: true }; // لقد مر أكثر من ساعة، مسموح بالمسح
+}
+
+/**
+ * حفظ توقيت المسح الأخير لهذا المطعم في الـ localStorage
+ */
+export function recordStoreScanTimestamp(storeId: string, timestamp?: number): void {
+  const currentTime = timestamp || new Date().getTime();
+  localStorage.setItem(`last_scan_store_${storeId}`, currentTime.toString());
+  localStorage.setItem(`last_scan_${storeId}`, currentTime.toString());
+}
+
+/**
+ * إعادة تعيين مهلة المسح لمطعم معين (مفيدة للتجار والاختبار)
+ */
+export function resetStoreScanCooldown(storeId: string): void {
+  localStorage.removeItem(`last_scan_store_${storeId}`);
+  localStorage.removeItem(`last_scan_${storeId}`);
+}
 
 /**
  * Get or create a unique persistent hardware/device identifier
@@ -72,17 +150,19 @@ export function resolveUserEmail(user?: UserProfile | null): string {
 export interface ScanEligibilityResult {
   isAllowed: boolean;
   secondsRemaining: number;
+  minutesRemaining?: number;
   userEmail: string;
   deviceId: string;
   devicePlatform: string;
   lastScanTimestamp?: string;
   lastScanTimeFormatted?: string;
   reason?: string;
+  storeId?: string;
 }
 
 /**
  * Validates if the customer is allowed to scan this specific restaurant's QR code.
- * Enforces a strict 60-second cooldown per restaurant by both Gmail account AND Device ID.
+ * Enforces a strict 1-hour (60-minute) cooldown per restaurant by localStorage, Gmail account, and Device ID.
  */
 export function checkScanCooldown(
   restaurantId: string,
@@ -94,10 +174,32 @@ export function checkScanCooldown(
   const userId = user?.id || '';
   const now = Date.now();
 
-  // 1. Check persistent scan events database
+  // 1. Direct check per restaurant storage key (canUserScanStore)
+  const storeCheck = canUserScanStore(restaurantId);
+  if (!storeCheck.allowed) {
+    const minutesRemaining = storeCheck.remainingMinutes || 1;
+    const secondsRemaining = storeCheck.remainingSeconds || minutesRemaining * 60;
+    const lastScanMs = now - (ONE_HOUR_MS - secondsRemaining * 1000);
+    return {
+      isAllowed: false,
+      secondsRemaining,
+      minutesRemaining,
+      userEmail,
+      deviceId,
+      devicePlatform,
+      storeId: restaurantId,
+      lastScanTimeFormatted: new Date(lastScanMs).toLocaleTimeString('ar-DZ', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+      reason: `⏳ عذراً، لقد قمت بمسح كود هذا المطعم مؤخراً. يرجى الانتظار لمدة ${minutesRemaining} دقيقة أخرى لتكرار زيارته.`,
+    };
+  }
+
+  // 2. Check persistent scan events database
   const scanLogs = getRealScanLogs();
   
-  // Find any successful scan for this restaurant in the last 60 seconds
+  // Find any successful scan for this restaurant in the last 1 hour
   const recentMatchingScan = scanLogs.find((scan) => {
     if (scan.restaurantId !== restaurantId) return false;
     // Disregard scans that were already blocked attempts
@@ -118,7 +220,7 @@ export function checkScanCooldown(
     return Boolean(matchesEmail || matchesUserId || matchesDevice);
   });
 
-  // 2. Also check live active stamp requests queue
+  // 3. Also check live active stamp requests queue
   const pendingRequests = getStampRequests();
   const recentMatchingReq = pendingRequests.find((req) => {
     if (req.restaurantId !== restaurantId) return false;
@@ -146,6 +248,7 @@ export function checkScanCooldown(
 
     const elapsed = Math.max(0, now - scanTimestampMs);
     const secondsRemaining = Math.max(1, Math.ceil((SCAN_COOLDOWN_MS - elapsed) / 1000));
+    const minutesRemaining = Math.max(1, Math.ceil(secondsRemaining / 60));
 
     const timeFormatted =
       'timeStr' in matchedScan
@@ -159,24 +262,28 @@ export function checkScanCooldown(
     return {
       isAllowed: false,
       secondsRemaining,
+      minutesRemaining,
       userEmail,
       deviceId,
       devicePlatform,
+      storeId: restaurantId,
       lastScanTimestamp:
         'timestamp' in matchedScan
           ? (matchedScan as RealScanLogEvent).timestamp
           : new Date(scanTimestampMs).toISOString(),
       lastScanTimeFormatted: timeFormatted,
-      reason: `تم رصد مسح متكرر لنفس الكود خلال أقل من دقيقة (${secondsRemaining} ثانية متبقية)`,
+      reason: `⏳ عذراً، لقد قمت بمسح كود هذا المطعم مؤخراً. يرجى الانتظار لمدة ${minutesRemaining} دقيقة أخرى لتكرار زيارته.`,
     };
   }
 
   return {
     isAllowed: true,
     secondsRemaining: 0,
+    minutesRemaining: 0,
     userEmail,
     deviceId,
     devicePlatform,
+    storeId: restaurantId,
   };
 }
 
@@ -222,6 +329,12 @@ export function recordDatabaseScan(params: {
     const current = getRealScanLogs();
     const updated = [logItem, ...current];
     localStorage.setItem(STORAGE_KEY_SCAN_EVENTS, JSON.stringify(updated.slice(0, 1500)));
+
+    // Record per-store scan timestamp on successful scan
+    if (params.status === 'accepted') {
+      recordStoreScanTimestamp(params.restaurantId, now.getTime());
+    }
+
     // Dispatch event for live UI listener
     window.dispatchEvent(new CustomEvent('pointili_scan_logged', { detail: logItem }));
   } catch (err) {
@@ -229,4 +342,43 @@ export function recordDatabaseScan(params: {
   }
 
   return logItem;
+}
+
+/**
+ * دالة تنفيذ عملية المسح للمطعم (مطابقة تماماً لطلب المستخدم)
+ */
+export function handleStoreScan(
+  storeId: string,
+  options?: {
+    onSuccess?: () => void;
+    onBlocked?: (remainingMinutes: number) => void;
+    showAlerts?: boolean;
+  }
+): { allowed: boolean; remainingMinutes?: number } {
+  const checkResult = canUserScanStore(storeId);
+
+  if (!checkResult.allowed) {
+    const mins = checkResult.remainingMinutes || 60;
+    if (options?.showAlerts) {
+      alert(
+        `⏳ عذراً، لقد قمت بمسح كود هذا المطعم مؤخراً. يرجى الانتظار لمدة ${mins} دقيقة أخرى لتكرار زيارته.`
+      );
+    }
+    options?.onBlocked?.(mins);
+    return {
+      allowed: false,
+      remainingMinutes: mins,
+    };
+  }
+
+  // إذا سمح النظام بالمسح، نقوم بتسجيل الوقت الحالي لهذا المطعم فقط
+  const currentTime = new Date().getTime();
+  recordStoreScanTimestamp(storeId, currentTime);
+
+  if (options?.showAlerts) {
+    alert(`✅ تم التحقق بنجاح! تم تسجيل زيارتك لهذا المطعم (معرف المحل: ${storeId}).`);
+  }
+  options?.onSuccess?.();
+
+  return { allowed: true };
 }

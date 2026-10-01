@@ -1735,7 +1735,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </span>
                     </h3>
                     <p className="text-xs text-zinc-400 mt-1 max-w-2xl leading-relaxed">
-                      توثيق دقيق لكل عملية مسح مع توقيتها ومعرف الجهاز (Device ID) وحساب الجيميل، مع تفعيل مهلة الـ 60 ثانية لحماية نقاط الزبائن ومنع الاحتيال والتكرار.
+                      توثيق دقيق لكل عملية مسح مع توقيتها ومعرف الجهاز (Device ID) وحساب الجيميل، مع تفعيل مهلة الساعة الكاملة (60 دقيقة) لحماية نقاط الزبائن ومنع الاحتيال والتكرار لكل مطعم على حدة.
                     </p>
                   </div>
                 </div>
@@ -1776,13 +1776,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
               <div className="p-4 rounded-2xl bg-zinc-900/80 border border-zinc-800">
                 <div className="flex items-center justify-between text-zinc-400 mb-1">
-                  <span className="text-xs font-medium">محاولات تم صدها (&lt; 60 ثانية)</span>
+                  <span className="text-xs font-medium">محاولات تم صدها (&lt; ساعة واحدة)</span>
                   <ShieldAlert className="w-4 h-4 text-amber-400" />
                 </div>
                 <div className="text-2xl font-black text-amber-400 font-mono">
                   {scanEvents.filter((s) => s.status === 'rate_limited').length}
                 </div>
-                <div className="text-[10px] text-zinc-500 mt-1">حماية التكرار في نفس الدقيقة</div>
+                <div className="text-[10px] text-zinc-500 mt-1">حماية التكرار قبل مرور 60 دقيقة</div>
               </div>
 
               <div className="p-4 rounded-2xl bg-zinc-900/80 border border-zinc-800">
@@ -2126,7 +2126,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           </span>
                           {scan.status === 'rate_limited' ? (
                             <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-400 text-[10px] font-bold border border-amber-500/30 flex items-center gap-1">
-                              <span>تم صد تكرار (&lt; 60 ثانية)</span>
+                              <span>تم صد تكرار (&lt; ساعة واحدة)</span>
                             </span>
                           ) : (
                             <span className="px-2 py-0.5 rounded-md bg-emerald-950/80 text-emerald-400 text-[10px] font-bold border border-emerald-800/40">

@@ -27,6 +27,8 @@ interface AuthScreenProps {
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onOpenAdminLogin }) => {
   const { t, language } = useLanguage();
+  const [activeView, setActiveView] = useState<'welcomeChoice' | 'appContent'>('welcomeChoice');
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [savedUserEmail, setSavedUserEmail] = useState<string | null>(null);
   const [savedUserName, setSavedUserName] = useState<string | null>(null);
   const [showThankYou, setShowThankYou] = useState<boolean>(false);
@@ -45,6 +47,60 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onOpenAdminLogi
       }
     } catch {}
   }, []);
+
+  // Listen for PWA beforeinstallprompt to enable install prompt
+  useEffect(() => {
+    const handleBeforeInstall = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      (window as any).deferredPrompt = e;
+      const btn = document.getElementById('installChoiceBtn');
+      if (btn) btn.style.display = 'block';
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    if ((window as any).deferredPrompt) {
+      setDeferredPrompt((window as any).deferredPrompt);
+    }
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+    };
+  }, []);
+
+  // زر "فتح التطبيق مباشرة"
+  const openDirectly = () => {
+    setActiveView('appContent');
+  };
+
+  // زر "تحميل وتثبيت"
+  const installApp = async () => {
+    const promptEvent = deferredPrompt || (window as any).deferredPrompt;
+    if (promptEvent) {
+      try {
+        await promptEvent.prompt();
+        const choiceResult = await promptEvent.userChoice;
+        if (choiceResult && choiceResult.outcome === 'accepted') {
+          console.log('تم قبول التثبيت');
+        }
+        setDeferredPrompt(null);
+        (window as any).deferredPrompt = null;
+      } catch (err) {
+        console.warn('Install prompt error:', err);
+      }
+    } else {
+      alert(
+        'التثبيت التلقائي غير مدعوم في هذا المتصفح، يمكنك فتحه مباشرة أو إضافته للشاشة الرئيسية يدويًا من إعدادات المتصفح.'
+      );
+      openDirectly(); // الانتقال المباشر للتطبيق
+    }
+  };
+
+  // Expose global helpers for inline HTML and prompts
+  useEffect(() => {
+    (window as any).openDirectly = openDirectly;
+    (window as any).installApp = installApp;
+  }, [deferredPrompt]);
 
   const closeThankYouModal = () => {
     setShowThankYou(false);
@@ -74,6 +130,14 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onOpenAdminLogi
               localStorage.setItem('user_name', userInfo.name);
             }
           } catch {}
+
+          const wrapper = document.getElementById('loginWrapper');
+          if (wrapper) wrapper.style.display = 'none';
+
+          const greeting = document.getElementById('userGreeting');
+          if (greeting) {
+            greeting.innerHTML = `أهلاً بك، ${userInfo.name || 'مستخدم'} 👋<br><span style="font-size:11px; color:#aaa;">تم تسجيل الدخول بنجاح</span>`;
+          }
 
           const profile = createGoogleUserProfile({
             email: userInfo.email,
@@ -187,148 +251,174 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onOpenAdminLogi
       </header>
 
       {/* Main Hero & Authentication Card */}
-      <main className="relative z-10 w-full max-w-md mx-auto px-6 py-2 flex-1 flex flex-col justify-center">
-        {/* Visual Hero Badge Showcase */}
-        <div className="mb-4 relative flex flex-col items-center text-center">
-          <div className="relative mb-3">
-            <div className="absolute inset-0 rounded-3xl bg-[#76FF03]/30 blur-xl animate-pulse" />
-
-            <div className="relative w-20 h-20 rounded-3xl bg-zinc-950 border-2 border-[#76FF03] p-3 flex flex-col items-center justify-center shadow-2xl shadow-[#76FF03]/20">
-              <PointiliLogo variant="mark" size="lg" theme="light" />
-            </div>
-
-            <div className="absolute -bottom-2 -right-2 px-2.5 py-0.5 rounded-full bg-[#76FF03] text-black font-extrabold text-[10px] flex items-center gap-1 shadow-lg shadow-[#76FF03]/40">
-              <Sparkles className="w-3 h-3 text-black" />
-              <span>BBA · 34</span>
-            </div>
-          </div>
-
-          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white leading-tight">
-            تسجيل الدخول الآمن بحساب Google
-          </h1>
-          <p className="mt-1 text-xs text-zinc-400 max-w-xs leading-relaxed">
-            كافيهات ومطاعم برج بوعريريج · اجمع 6 أختام واحصل على وجبتك مجاناً مع حماية تامة لخصوصيتك وبريدك.
-          </p>
-        </div>
-
-        {/* SECURE & PRIVATE GOOGLE LOGIN CONTAINER */}
-        <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-5 mb-4 shadow-2xl backdrop-blur-md relative overflow-hidden">
-          {/* Top Verification Header */}
-          <div className="flex items-center justify-between pb-3.5 mb-3 border-b border-zinc-800/80">
-            <div className="flex items-center gap-2">
-              {/* Google G Multi-color Icon */}
-              <div className="w-8 h-8 rounded-xl bg-white/10 border border-white/20 p-1.5 flex items-center justify-center shadow-sm">
-                <svg className="w-full h-full" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.36 24 12 24z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.98 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.36 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-                  />
-                </svg>
-              </div>
-              <div>
-                <div className="text-xs font-black text-white flex items-center gap-1.5">
-                  <span>Google Sign-In الرسمي</span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#76FF03] animate-ping" />
-                </div>
-                <div className="text-[10px] text-zinc-400">توثيق موحد لكافة أجهزتك ومطاعمك</div>
+      <main className="relative z-10 w-full max-w-md mx-auto px-5 py-4 flex-1 flex flex-col justify-center">
+        {/* =========================================================================
+            VIEW 1: WAITING / CHOICE SCREEN ("Pointili - فتح أو تحميل")
+            ========================================================================= */}
+        {activeView === 'welcomeChoice' ? (
+          <div
+            id="welcomeChoiceScreen"
+            className="container mx-auto max-w-[380px] w-full bg-[#1a1a1a] border border-[#333] rounded-[20px] p-[25px] shadow-[0_10px_30px_rgba(0,0,0,0.5)] text-center animate-in fade-in zoom-in-95 duration-200"
+          >
+            {/* Visual Icon Badge */}
+            <div className="flex justify-center mb-3">
+              <div className="relative w-16 h-16 rounded-2xl bg-zinc-950 border-2 border-[#76FF03] p-2 flex items-center justify-center shadow-lg shadow-[#76FF03]/20">
+                <PointiliLogo variant="mark" size="md" theme="light" />
               </div>
             </div>
 
-            <div className="px-2.5 py-1 rounded-full bg-[#76FF03]/15 border border-[#76FF03]/40 text-[#76FF03] text-[10px] font-black flex items-center gap-1">
-              <ShieldCheck className="w-3 h-3" />
-              <span>خصوصية 100%</span>
-            </div>
-          </div>
+            <h2 className="text-[#22c55e] font-black text-xl mb-2.5">
+              Pointili - برج بوعريريج
+            </h2>
+            <p className="text-[#aaa] text-[13px] leading-relaxed mb-6">
+              اختر كيف تريد استخدام تطبيق الولاء الخاص بك:
+            </p>
 
-          {/* Quick Resume for Returning Account (if previously signed in) */}
-          {savedUserEmail && (
-            <div className="mb-3.5 p-3 rounded-2xl bg-zinc-950/80 border border-[#76FF03]/30 flex items-center justify-between">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-[#76FF03] text-black font-black flex items-center justify-center text-xs shrink-0">
-                  {savedUserName ? savedUserName.slice(0, 2).toUpperCase() : 'G'}
-                </div>
-                <div className="min-w-0">
-                  <div className="text-xs font-bold text-white truncate">
-                    {savedUserName || 'حسابك المحفوظ'}
+            {/* خيار الفتح المباشر */}
+            <button
+              type="button"
+              onClick={openDirectly}
+              className="choice-btn btn-open w-full p-[14px] rounded-full font-bold text-sm cursor-pointer border-none mb-3 transition-all duration-200 bg-[#22c55e] hover:bg-[#16a34a] text-black active:scale-[0.98] shadow-lg shadow-[#22c55e]/25 flex items-center justify-center gap-2"
+            >
+              <span>🌐 فتح التطبيق مباشرة</span>
+            </button>
+
+            {/* خيار التثبيت/التحميل (يظهر تلقائياً لو المتصفح يدعمه) */}
+            <button
+              id="installChoiceBtn"
+              type="button"
+              onClick={installApp}
+              className="choice-btn btn-install w-full p-[14px] rounded-full font-bold text-sm cursor-pointer border-none mb-3 transition-all duration-200 bg-[#2563eb] hover:bg-[#1d4ed8] text-white active:scale-[0.98] shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2"
+            >
+              <span>📥 تحميل وتثبيت على الهاتف</span>
+            </button>
+
+            {/* Quick Resume for Returning Account (if previously signed in) */}
+            {savedUserEmail && (
+              <div className="mt-4 pt-3.5 border-t border-zinc-800 text-right">
+                <div className="text-[11px] text-zinc-400 mb-2">حساب مسجل سابقاً على هذا الجهاز:</div>
+                <button
+                  type="button"
+                  onClick={handleQuickResume}
+                  className="w-full p-2.5 rounded-xl bg-zinc-900 border border-[#76FF03]/40 flex items-center justify-between text-xs text-white hover:border-[#76FF03] transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-6 h-6 rounded-lg bg-[#76FF03] text-black font-black text-[10px] flex items-center justify-center shrink-0">
+                      G
+                    </div>
+                    <span className="truncate max-w-[170px] font-mono text-[11px] text-zinc-300" dir="ltr">
+                      {maskEmail(savedUserEmail)}
+                    </span>
                   </div>
-                  <div className="text-[10px] font-mono text-[#76FF03] truncate" dir="ltr">
-                    {maskEmail(savedUserEmail)}
+                  <span className="text-[#76FF03] font-bold text-[11px] flex items-center gap-1 shrink-0">
+                    متابعة مباشرة ←
+                  </span>
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* =========================================================================
+              VIEW 2: APP CONTENT & GOOGLE AUTHENTICATION SCREEN
+              ========================================================================= */
+          <div
+            id="appContent"
+            className="container mx-auto max-w-[380px] w-full bg-[#1a1a1a] border border-[#333] rounded-[20px] p-[25px] shadow-[0_10px_30px_rgba(0,0,0,0.5)] text-center animate-in fade-in zoom-in-95 duration-200"
+          >
+            {/* Visual Header */}
+            <div className="flex justify-center mb-2.5">
+              <PointiliLogo variant="full" size="md" theme="dark" />
+            </div>
+
+            <h2 className="text-[#22c55e] font-black text-xl mb-1.5">
+              تسجيل الدخول
+            </h2>
+            <p className="text-[#aaa] text-[13px] leading-relaxed mb-4">
+              سجل بحسابك لتبدأ في جمع الأختام بكل أمان.
+            </p>
+
+            {/* Quick Resume for Returning Account */}
+            {savedUserEmail && (
+              <div className="mb-3.5 p-3 rounded-2xl bg-zinc-950/80 border border-[#76FF03]/30 flex items-center justify-between text-right">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-[#76FF03] text-black font-black flex items-center justify-center text-xs shrink-0">
+                    {savedUserName ? savedUserName.slice(0, 2).toUpperCase() : 'G'}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-white truncate">
+                      {savedUserName || 'حسابك المحفوظ'}
+                    </div>
+                    <div className="text-[10px] font-mono text-[#76FF03] truncate" dir="ltr">
+                      {maskEmail(savedUserEmail)}
+                    </div>
                   </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={handleQuickResume}
+                  className="px-3 py-1.5 rounded-xl bg-[#76FF03] hover:bg-[#8aff24] text-black font-black text-[11px] shrink-0 flex items-center gap-1 shadow-md shadow-[#76FF03]/20 active:scale-95 transition-all cursor-pointer"
+                >
+                  <span>متابعة</span>
+                  <ArrowRight className="w-3 h-3" />
+                </button>
               </div>
+            )}
 
-              <button
-                type="button"
-                onClick={handleQuickResume}
-                className="px-3 py-1.5 rounded-xl bg-[#76FF03] hover:bg-[#8aff24] text-black font-black text-[11px] shrink-0 flex items-center gap-1 shadow-md shadow-[#76FF03]/20 active:scale-95 transition-all cursor-pointer"
-              >
-                <span>متابعة</span>
-                <ArrowRight className="w-3 h-3" />
-              </button>
-            </div>
-          )}
-
-          {/* OFFICIAL GOOGLE SIGN-IN CONTAINER (Requested HTML Format) */}
-          <div className="google-auth-container rounded-2xl p-4 bg-[#121212] border border-zinc-800 flex flex-col items-center justify-center my-2 text-center transition-all">
-            {/* GIS declarative tags */}
+            {/* GOOGLE AUTH BOX & GIS DECLARATIVE WRAPPER */}
             <div
-              id="g_id_onload"
-              data-client_id={OFFICIAL_GOOGLE_CLIENT_ID}
-              data-callback="handleCredentialResponse"
-              data-auto_prompt="false"
-            />
-
-            {/* GIS container rendered via JS or declarative */}
-            <div ref={googleBtnContainerRef} className="flex justify-center min-h-[44px] w-full">
+              className="google-auth-box my-3 flex flex-col items-center justify-center min-h-[44px]"
+              id="loginWrapper"
+            >
+              {/* GIS declarative tags */}
               <div
-                className="g_id_signin"
-                data-type="standard"
-                data-shape="pill"
-                data-theme="filled_black"
-                data-text="signin_with"
-                data-size="large"
-                data-locale="ar"
+                id="g_id_onload"
+                data-client_id={OFFICIAL_GOOGLE_CLIENT_ID}
+                data-callback="handleCredentialResponse"
+                data-auto_prompt="false"
               />
-            </div>
-          </div>
 
-          {/* PRIVACY SHIELD GUARANTEE BOX */}
-          <div className="mt-3.5 p-3 rounded-2xl bg-black/60 border border-zinc-800/80 space-y-1.5">
-            <div className="flex items-center gap-1.5 font-bold text-xs text-[#76FF03]">
-              <Lock className="w-3.5 h-3.5" />
-              <span>كيف يحمي نظام Pointili خصوصيتك؟</span>
+              {/* GIS button container */}
+              <div ref={googleBtnContainerRef} className="flex justify-center min-h-[44px] w-full">
+                <div
+                  className="g_id_signin"
+                  data-type="standard"
+                  data-shape="pill"
+                  data-theme="filled_black"
+                  data-text="signin_with"
+                  data-size="large"
+                  data-locale="ar"
+                />
+              </div>
             </div>
-            <ul className="text-[11px] text-zinc-400 space-y-1 pr-1 leading-relaxed">
-              <li className="flex items-start gap-1.5">
-                <span className="text-[#76FF03] font-bold">✓</span>
-                <span>
-                  <strong>بريدك الشخصي مخفي تماماً:</strong> يرى الكاشير كود معرّف الزبون فقط (GID-BBA) دون كشف Gmail.
-                </span>
-              </li>
-              <li className="flex items-start gap-1.5">
-                <span className="text-[#76FF03] font-bold">✓</span>
-                <span>
-                  <strong>أختامك الـ 6 محفوظة دائماً:</strong> عند تغيير هاتفك، يكفي تسجيل الدخول بـ Google لاسترجاع بطاقاتك فوراً.
-                </span>
-              </li>
-            </ul>
+
+            {/* USER GREETING BANNER */}
+            <div id="userGreeting" className="text-[#22c55e] font-bold text-sm my-2"></div>
+
+            {/* Back to Choice button */}
+            <button
+              type="button"
+              onClick={() => setActiveView('welcomeChoice')}
+              className="mt-3.5 px-4 py-2 rounded-full border border-zinc-700 bg-zinc-900/80 hover:bg-zinc-800 text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer inline-flex items-center gap-1.5"
+            >
+              <span>↩ العودة لخيارات الفتح والتحميل</span>
+            </button>
+
+            {/* Privacy Shield note */}
+            <div className="mt-4 pt-3.5 border-t border-zinc-800/80 text-right space-y-1">
+              <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#76FF03]">
+                <Lock className="w-3 h-3" />
+                <span>خصوصية 100% · بريدك مخفي تماماً</span>
+              </div>
+              <p className="text-[10px] text-zinc-500 leading-relaxed">
+                يتم ربط أختامك بـ ID سري ومشفر دون مشاركة البريد الإلكتروني مع أي طرف آخر.
+              </p>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Feature Highlights Grid */}
-        <div className="grid grid-cols-3 gap-2 mb-2 text-center">
+        <div className="grid grid-cols-3 gap-2 mt-4 text-center">
           <div className="p-2.5 rounded-xl bg-zinc-900/50 border border-zinc-800/60">
             <QrCode className="w-4 h-4 mx-auto mb-1 text-[#76FF03]" />
             <div className="text-[11px] font-semibold text-zinc-200">مسح كود QR</div>

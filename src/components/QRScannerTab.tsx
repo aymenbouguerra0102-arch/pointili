@@ -40,6 +40,8 @@ import {
 import {
   checkScanCooldown,
   recordDatabaseScan,
+  canUserScanStore,
+  recordStoreScanTimestamp,
   ScanEligibilityResult,
   SCAN_COOLDOWN_SECONDS,
 } from '../services/scanAntiFraudService';
@@ -919,21 +921,39 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
             </div>
 
             <h3 className="text-base sm:text-lg font-black text-white mb-1">
-              منع المسح المتكرر في نفس الدقيقة ⏱️
+              منع المسح المتتالي لنفس المطعم إلا بعد مرور ساعة ⏳
             </h3>
 
             <p className="text-[12px] text-amber-300 font-medium mb-3">
-              نظام حماية ولاء Pointili: تم مسح كود هذا المحل مسبقاً لحسابك أو جهازك
+              نظام حماية ولاء Pointili: مهلة ساعة كاملة (60 دقيقة) لكل مطعم بشكل منفصل
             </p>
+
+            {/* Direct Warning Alert Message */}
+            <div className="my-2.5 p-3 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-200 text-xs font-semibold leading-relaxed text-right">
+              ⏳ عذراً، لقد قمت بمسح كود هذا المطعم مؤخراً. يرجى الانتظار لمدة{' '}
+              <span className="font-mono text-white font-black underline underline-offset-2">
+                {rateLimitResult.minutesRemaining || Math.max(1, Math.ceil(cooldownCountdown / 60))} دقيقة
+              </span>{' '}
+              أخرى لتكرار زيارته.
+            </div>
 
             {/* Circular Countdown Badge */}
             <div className="my-3 p-3.5 rounded-2xl bg-black/70 border border-amber-500/30 flex flex-col items-center justify-center">
-              <div className="text-[11px] text-zinc-400 font-bold mb-1">الوقت المتبقي لإعادة المسح:</div>
+              <div className="text-[11px] text-zinc-400 font-bold mb-1">الوقت المتبقي بدقة:</div>
               <div className="flex items-center gap-2">
-                <span className="font-mono text-3xl font-black text-amber-400">
-                  {cooldownCountdown}
-                </span>
-                <span className="text-xs text-zinc-400 font-bold">ثانية</span>
+                {cooldownCountdown >= 60 ? (
+                  <div className="flex items-baseline gap-1.5 font-mono font-black text-amber-400">
+                    <span className="text-3xl">{Math.floor(cooldownCountdown / 60)}</span>
+                    <span className="text-xs text-zinc-400 font-sans font-bold">دقيقة</span>
+                    <span className="text-2xl text-amber-300/80">{cooldownCountdown % 60}</span>
+                    <span className="text-xs text-zinc-400 font-sans font-bold">ثانية</span>
+                  </div>
+                ) : (
+                  <div className="flex items-baseline gap-1.5 font-mono font-black text-amber-400">
+                    <span className="text-3xl">{cooldownCountdown}</span>
+                    <span className="text-xs text-zinc-400 font-sans font-bold">ثانية</span>
+                  </div>
+                )}
               </div>
               <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden mt-2">
                 <div
@@ -973,7 +993,7 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
 
             {/* Explanatory security note */}
             <p className="text-[10px] text-zinc-400 leading-relaxed mb-3.5">
-              لحماية نظام المكافآت ومنع التكرار غير المصرح به، يُسمح بمسح واحد كل 60 ثانية لكل زبون وجهاز. تم توثيق المحاولة في قاعدة البيانات.
+              لحماية نظام المكافآت ومنع التكرار غير المصرح به، يُسمح بمسح واحد كل ساعة (60 دقيقة) لكل مطعم بشكل منفصل. تم توثيق المحاولة وتحديث سجل الأمان.
             </p>
 
             <button
