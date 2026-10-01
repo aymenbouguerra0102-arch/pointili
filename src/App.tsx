@@ -116,7 +116,6 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<NavTab>('cards');
   const [cardForDetail, setCardForDetail] = useState<Restaurant | null>(null);
   const [scannedTargetRestaurant, setScannedTargetRestaurant] = useState<Restaurant | null>(null);
-  const [autoTriggerScannerVerify, setAutoTriggerScannerVerify] = useState<boolean>(false);
   const [cardForRedemption, setCardForRedemption] = useState<Restaurant | null>(null);
   const [merchantQROpen, setMerchantQROpen] = useState<boolean>(false);
   const [discoverModalOpen, setDiscoverModalOpen] = useState<boolean>(false);
@@ -458,8 +457,6 @@ export default function App() {
               onAddStamp={(id) => handleAddStamp(id)}
               onNavigateToCards={() => setCurrentTab('cards')}
               preSelectedRestaurant={scannedTargetRestaurant || cardForDetail}
-              autoTriggerVerifyAndSend={autoTriggerScannerVerify}
-              onResetAutoTrigger={() => setAutoTriggerScannerVerify(false)}
             />
           )}
 
@@ -496,17 +493,10 @@ export default function App() {
             setCardForDetail(null);
             setCurrentTab('scanner');
           }}
-          onVerifyAndSend={(r) => {
-            setScannedTargetRestaurant(r);
-            setAutoTriggerScannerVerify(true);
-            setCardForDetail(null);
-            setCurrentTab('scanner');
-          }}
           onRedeemReward={(r) => {
             setCardForDetail(null);
             setCardForRedemption(r);
           }}
-          onDirectAddStamp={(id) => handleAddStamp(id)}
         />
 
         {/* Cashier Reward Redemption Modal */}
@@ -522,10 +512,6 @@ export default function App() {
           isOpen={merchantQROpen}
           onClose={() => setMerchantQROpen(false)}
           initialRestaurantId={cardForDetail?.id}
-          onSimulateCustomerScan={(id) => {
-            handleAddStamp(id);
-            setCurrentTab('scanner');
-          }}
         />
 
         {/* Discover & Join New Places Modal */}

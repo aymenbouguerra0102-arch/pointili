@@ -49,8 +49,6 @@ interface QRScannerTabProps {
   };
   onNavigateToCards: () => void;
   preSelectedRestaurant?: Restaurant | null;
-  autoTriggerVerifyAndSend?: boolean;
-  onResetAutoTrigger?: () => void;
 }
 
 // Synthesize pleasant chime on successful scan using Web Audio API
@@ -127,8 +125,6 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
   onAddStamp,
   onNavigateToCards,
   preSelectedRestaurant,
-  autoTriggerVerifyAndSend,
-  onResetAutoTrigger,
 }) => {
   const { t, language } = useLanguage();
 
@@ -269,32 +265,6 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
     },
     [restaurants, handleInitiateStampRequest, stopCamera, voiceEnabled]
   );
-
-  // Requirement: "تحقق وأرسل" Action at SCAN ME
-  const handleVerifyAndSendCurrent = useCallback(
-    (customCode?: string) => {
-      if (isHandlingScanRef.current) return;
-
-      if (customCode) {
-        handleProcessScannedCode(customCode);
-        return;
-      }
-
-      const target = preSelectedRestaurant || activeStore;
-      if (target) {
-        handleInitiateStampRequest(target);
-      }
-    },
-    [activeStore, preSelectedRestaurant, handleInitiateStampRequest, handleProcessScannedCode]
-  );
-
-  // Auto-trigger verify and send if navigated with autoTrigger flag
-  useEffect(() => {
-    if (autoTriggerVerifyAndSend && activeStore) {
-      handleVerifyAndSendCurrent();
-      onResetAutoTrigger?.();
-    }
-  }, [autoTriggerVerifyAndSend, activeStore, handleVerifyAndSendCurrent, onResetAutoTrigger]);
 
   // Live polling & event listener for merchant's Accept/Reject action
   useEffect(() => {
@@ -708,17 +678,15 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
             )}
           </div>
 
-          {/* Action Button: "تحقق وأرسل" directly at SCAN ME */}
-          <div className="pointer-events-auto my-1.5 z-20">
-            <button
-              type="button"
-              onClick={() => handleVerifyAndSendCurrent()}
-              className="py-2.5 px-6 rounded-2xl bg-[#76FF03] hover:bg-[#8aff24] active:scale-95 text-black font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xl shadow-[#76FF03]/30 transition-all cursor-pointer border border-[#76FF03]"
-              title="التحقق من الكود وإرسال طلب الختم مباشرة للمحل"
-            >
-              <Send className="w-4 h-4 stroke-[2.5]" />
-              <span>تحقق وأرسل</span>
-            </button>
+          {/* Live Scanner Guide: Only sends upon detecting authorized cashier table QR code */}
+          <div className="pointer-events-none my-2 z-20 text-center max-w-xs px-4">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/80 backdrop-blur-md border border-[#76FF03]/40 text-white text-xs font-bold shadow-xl">
+              <span className="w-2 h-2 rounded-full bg-[#76FF03] animate-pulse" />
+              <span>وجّه الكاميرا نحو كود QR لطاولة الكاشير</span>
+            </div>
+            <p className="text-[11px] text-zinc-300 mt-1 font-medium leading-relaxed drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">
+              لا يُرسل الطلب إلا عند قراءة كود QR المعتمد لطاولة كاشير المحل تلقائياً
+            </p>
           </div>
 
           {/* Bottom Dark Bar with Flashlight & Gallery Buttons */}
@@ -800,31 +768,13 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
               <span>استمع إلى النطق الصوتي للتحذير 🔊</span>
             </button>
 
-            {/* Switch store action if a matching restaurant is recognized */}
-            {matchingRestaurantForScannedCode && (
-              <button
-                type="button"
-                onClick={() => {
-                  const target = matchingRestaurantForScannedCode;
-                  setActiveStore(target);
-                  setMismatchError(null);
-                  isHandlingScanRef.current = false;
-                  handleInitiateStampRequest(target);
-                }}
-                className="w-full mb-2 py-3 px-4 rounded-xl bg-[#76FF03] hover:bg-[#8aff24] text-black font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#76FF03]/25 cursor-pointer transition-all"
-              >
-                <span>اعتماد {matchingRestaurantForScannedCode.nameAr || matchingRestaurantForScannedCode.name} وإرسال طلب الختم</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            )}
-
             <button
               type="button"
               onClick={handleDismissMismatch}
               className="w-full py-2.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>إعادة المحاولة ومسح كود متجر معتمد</span>
+              <RefreshCw className="w-3.5 h-3.5 text-[#76FF03]" />
+              <span>إعادة المحاولة ومسح كود طاولة الكاشير المعتمد</span>
             </button>
           </div>
         </div>

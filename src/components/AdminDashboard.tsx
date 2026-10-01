@@ -1367,10 +1367,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             setMerchantStandOpen(false);
             setSelectedRestForQR(null);
           }}
-          onSimulateCustomerScan={(id) => {
-            const rest = restaurants.find((r) => r.id === id);
-            if (rest) handleTestScan(rest);
-          }}
         />
       )}
     </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Restaurant } from '../types';
-import { X, QrCode, Store, Sparkles, Copy, Check, Printer, ShieldCheck, AlertCircle } from 'lucide-react';
+import { X, QrCode, Store, Copy, Check, Printer, ShieldCheck, AlertCircle } from 'lucide-react';
 import { PointiliLogo } from './PointiliLogo';
 import { getStoreQRInfo } from '../data/qrStoreDirectory';
 
@@ -8,7 +8,6 @@ interface MerchantQRSheetProps {
   restaurants: Restaurant[];
   isOpen: boolean;
   onClose: () => void;
-  onSimulateCustomerScan: (restaurantId: string) => void;
   initialRestaurantId?: string;
 }
 
@@ -16,7 +15,6 @@ export const MerchantQRSheet: React.FC<MerchantQRSheetProps> = ({
   restaurants,
   isOpen,
   onClose,
-  onSimulateCustomerScan,
   initialRestaurantId,
 }) => {
   const [selectedRestId, setSelectedRestId] = useState<string>(
@@ -158,25 +156,21 @@ export const MerchantQRSheet: React.FC<MerchantQRSheetProps> = ({
           </div>
         )}
 
-        {/* Action Buttons */}
-        <div className="grid grid-cols-2 gap-2">
+        {/* Action Buttons: Print sticker for cashier table */}
+        <div className="flex gap-2">
           <button
-            onClick={() => {
-              onSimulateCustomerScan(activeRest.id);
-              onClose();
-            }}
-            className="py-2.5 px-3 rounded-xl bg-[#76FF03] hover:bg-[#8aff24] text-black font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-[#76FF03]/20 cursor-pointer"
+            onClick={handlePrint}
+            className="flex-1 py-3 px-4 rounded-xl bg-[#76FF03] hover:bg-[#8aff24] text-black font-extrabold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-[#76FF03]/25 cursor-pointer"
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>تجربة المسح الآن</span>
+            <Printer className="w-4 h-4 stroke-[2.5]" />
+            <span>طباعة ملصق طاولة الكاشير</span>
           </button>
 
           <button
-            onClick={handlePrint}
-            className="py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-850 text-white font-semibold text-xs border border-zinc-800 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+            onClick={onClose}
+            className="py-3 px-5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs border border-zinc-800 transition-colors cursor-pointer"
           >
-            <Printer className="w-3.5 h-3.5 text-zinc-400" />
-            <span>طباعة الملصق</span>
+            إغلاق
           </button>
         </div>
       </div>

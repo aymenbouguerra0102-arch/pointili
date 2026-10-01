@@ -14,7 +14,6 @@ import {
   ShieldAlert,
   ShieldCheck,
   Download,
-  Send,
   Camera,
 } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
@@ -24,16 +23,13 @@ interface CardDetailModalProps {
   restaurant: Restaurant | null;
   onClose: () => void;
   onScanStamp: (restaurant: Restaurant) => void;
-  onVerifyAndSend?: (restaurant: Restaurant, payload?: string) => void;
   onRedeemReward: (restaurant: Restaurant) => void;
-  onDirectAddStamp: (restaurantId: string) => void;
 }
 
 export const CardDetailModal: React.FC<CardDetailModalProps> = ({
   restaurant,
   onClose,
   onScanStamp,
-  onVerifyAndSend,
   onRedeemReward,
 }) => {
   const { t, language } = useLanguage();
@@ -189,33 +185,20 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({
                 </span>
               </div>
 
-              {/* ACTION BUTTONS: تحقق وأرسل + مسح بالكاميرا */}
-              <div className="mt-3.5 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (onVerifyAndSend) {
-                      onVerifyAndSend(restaurant, qrInfo.payload);
-                    } else {
-                      onScanStamp(restaurant);
-                    }
-                  }}
-                  className="flex-1 py-2.5 px-3.5 rounded-xl bg-[#76FF03] hover:bg-[#8aff24] active:scale-95 text-black font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-lg shadow-[#76FF03]/25 cursor-pointer transition-all border border-[#76FF03]"
-                  title="التحقق من صحة الكود وإرسال طلب الختم مباشرة للمحل"
-                >
-                  <Send className="w-4 h-4 stroke-[2.5]" />
-                  <span>تحقق وأرسل</span>
-                </button>
-
+              {/* ACTION: فتح الكاميرا لمسح كود طاولة الكاشير */}
+              <div className="mt-3.5">
                 <button
                   type="button"
                   onClick={() => onScanStamp(restaurant)}
-                  className="py-2.5 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs flex items-center justify-center gap-1.5 border border-zinc-700 active:scale-95 transition-all cursor-pointer shrink-0"
-                  title="فتح كاميرا المسح التلقائي"
+                  className="w-full py-2.5 px-3.5 rounded-xl bg-[#76FF03] hover:bg-[#8aff24] active:scale-95 text-black font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-[#76FF03]/25 cursor-pointer transition-all border border-[#76FF03]"
+                  title="فتح كاميرا المسح لقراءة كود طاولة الكاشير"
                 >
-                  <Camera className="w-3.5 h-3.5 text-[#76FF03]" />
-                  <span>مسح بالكاميرا</span>
+                  <Camera className="w-4 h-4 stroke-[2.5]" />
+                  <span>فتح الكاميرا لمسح كود طاولة الكاشير</span>
                 </button>
+                <p className="text-[10px] text-zinc-400 text-center mt-1.5 font-medium">
+                  لا يتم احتساب الختم إلا عند مسح رمز الـ QR المعتمد على طاولة كاشير المحل بالكاميرا
+                </p>
               </div>
             </div>
           ) : (
