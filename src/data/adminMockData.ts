@@ -127,9 +127,14 @@ export interface RealScanLogEvent {
   restaurantName: string;
   timestamp: string; // ISO
   dateStr: string; // YYYY-MM-DD
-  timeStr: string; // HH:MM
+  timeStr: string; // HH:MM:SS
   userId?: string;
   userName?: string;
+  userEmail?: string;
+  deviceId?: string;
+  devicePlatform?: string;
+  status?: 'accepted' | 'rate_limited';
+  blockReason?: string;
 }
 
 export const STORAGE_KEY_REGISTERED_USERS = 'pointili_registered_users_v2';
@@ -177,10 +182,15 @@ export function recordRealScanLog(event: {
   restaurantName: string;
   userId?: string;
   userName?: string;
+  userEmail?: string;
+  deviceId?: string;
+  devicePlatform?: string;
+  status?: 'accepted' | 'rate_limited';
+  blockReason?: string;
 }): RealScanLogEvent {
   const now = new Date();
   const dateStr = now.toISOString().slice(0, 10);
-  const timeStr = now.toLocaleTimeString('ar-DZ', { hour: '2-digit', minute: '2-digit' });
+  const timeStr = now.toLocaleTimeString('ar-DZ', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const logItem: RealScanLogEvent = {
     id: `scan_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     restaurantId: event.restaurantId,
@@ -190,13 +200,19 @@ export function recordRealScanLog(event: {
     timeStr,
     userId: event.userId,
     userName: event.userName,
+    userEmail: event.userEmail,
+    deviceId: event.deviceId,
+    devicePlatform: event.devicePlatform,
+    status: event.status || 'accepted',
+    blockReason: event.blockReason,
   };
 
   try {
     const current = getRealScanLogs();
     const updated = [logItem, ...current];
-    // Keep last 1000 scans
-    localStorage.setItem(STORAGE_KEY_SCAN_EVENTS, JSON.stringify(updated.slice(0, 1000)));
+    // Keep last 1500 scans
+    localStorage.setItem(STORAGE_KEY_SCAN_EVENTS, JSON.stringify(updated.slice(0, 1500)));
+    window.dispatchEvent(new CustomEvent('pointili_scan_logged', { detail: logItem }));
   } catch {}
 
   return logItem;

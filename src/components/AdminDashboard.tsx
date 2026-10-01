@@ -31,6 +31,8 @@ import {
   Bell,
   Send,
   Volume2,
+  Smartphone,
+  ShieldAlert,
 } from 'lucide-react';
 import {
   CURRENT_APP_VERSION,
@@ -81,12 +83,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onSimulateScan,
   onApproveStampToUser,
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'restaurants' | 'requests' | 'winners' | 'users' | 'updates'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'restaurants' | 'requests' | 'winners' | 'users' | 'updates' | 'scans'>('overview');
   const [requestsList, setRequestsList] = useState<StampRequest[]>(() => getStampRequests());
   const [requestsFilter, setRequestsFilter] = useState<'all' | 'pending' | 'appealed' | 'accepted' | 'rejected'>('all');
   const [isAddPartnerOpen, setIsAddPartnerOpen] = useState(false);
   const [merchantStandOpen, setMerchantStandOpen] = useState(false);
   const [selectedRestForQR, setSelectedRestForQR] = useState<Restaurant | null>(null);
+
+  // Anti-Fraud Scans Filter State
+  const [scansFilter, setScansFilter] = useState<'all' | 'accepted' | 'rate_limited'>('all');
+  const [scansSearchQuery, setScansSearchQuery] = useState('');
 
   // App Renewal Broadcast State
   const [broadcastTitle, setBroadcastTitle] = useState('🎉 تم تجديد تطبيق Pointili بإصدار جديد!');
@@ -130,6 +136,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       return () => clearTimeout(timer);
     }
   }, [toastMessage]);
+
+  // Live real-time scan event listener
+  useEffect(() => {
+    const handleScanLogged = () => {
+      setRefreshTrigger((prev) => prev + 1);
+    };
+    window.addEventListener('pointili_scan_logged', handleScanLogged);
+    return () => window.removeEventListener('pointili_scan_logged', handleScanLogged);
+  }, []);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -353,7 +368,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               }`}
             >
               <Bell className="w-4 h-4 text-[#76FF03]" />
-              <span>إشعار التجديد لجميع المحمّلين (Broadcast)</span>
+              <span>إشعار التجديد (Broadcast)</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('scans')}
+              className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
+                activeTab === 'scans'
+                  ? 'bg-[#76FF03] text-black shadow-md shadow-[#76FF03]/20'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4" />
+              <span>Anti-Fraud & سجل المسح ({scanEvents.length})</span>
             </button>
           </div>
 
@@ -1629,6 +1656,237 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Anti-Fraud & Scan Logs Tab */}
+        {activeTab === 'scans' && (
+          <div className="space-y-6">
+            {/* Header Card */}
+            <div className="p-6 rounded-3xl bg-zinc-900/90 border border-zinc-800 shadow-xl backdrop-blur-md relative overflow-hidden">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-[#76FF03]/10 border border-[#76FF03]/30 flex items-center justify-center text-[#76FF03] shadow-md">
+                    <ShieldCheck className="w-6 h-6 stroke-[2.5]" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-white flex items-center gap-2">
+                      <span>سجل عمليات المسح ونظام الحماية من التكرار (Anti-Fraud)</span>
+                      <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#76FF03] text-black font-black">
+                        نشط ومفعّل 🛡️
+                      </span>
+                    </h3>
+                    <p className="text-xs text-zinc-400 mt-1 max-w-2xl leading-relaxed">
+                      توثيق دقيق لكل عملية مسح مع توقيتها ومعرف الجهاز (Device ID) وحساب الجيميل، مع تفعيل مهلة الـ 60 ثانية لحماية نقاط الزبائن ومنع الاحتيال والتكرار.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <button
+                    onClick={() => setRefreshTrigger((prev) => prev + 1)}
+                    className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-750 border border-zinc-700 text-xs font-bold text-zinc-200 flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-[#76FF03]" />
+                    <span>تحديث السجل</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Metrics 4-Grid */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="p-4 rounded-2xl bg-zinc-900/80 border border-zinc-800">
+                <div className="flex items-center justify-between text-zinc-400 mb-1">
+                  <span className="text-xs font-medium">إجمالي عمليات المسح</span>
+                  <QrCode className="w-4 h-4 text-[#76FF03]" />
+                </div>
+                <div className="text-2xl font-black text-white font-mono">{scanEvents.length}</div>
+                <div className="text-[10px] text-zinc-500 mt-1">المسجلة في قاعدة البيانات</div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-zinc-900/80 border border-zinc-800">
+                <div className="flex items-center justify-between text-zinc-400 mb-1">
+                  <span className="text-xs font-medium">المسح المعتمد الناجح</span>
+                  <CheckCircle2 className="w-4 h-4 text-[#76FF03]" />
+                </div>
+                <div className="text-2xl font-black text-[#76FF03] font-mono">
+                  {scanEvents.filter((s) => s.status !== 'rate_limited').length}
+                </div>
+                <div className="text-[10px] text-zinc-500 mt-1">أختام مضافة للبطاقات</div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-zinc-900/80 border border-zinc-800">
+                <div className="flex items-center justify-between text-zinc-400 mb-1">
+                  <span className="text-xs font-medium">محاولات تم صدها (&lt; 60 ثانية)</span>
+                  <ShieldAlert className="w-4 h-4 text-amber-400" />
+                </div>
+                <div className="text-2xl font-black text-amber-400 font-mono">
+                  {scanEvents.filter((s) => s.status === 'rate_limited').length}
+                </div>
+                <div className="text-[10px] text-zinc-500 mt-1">حماية التكرار في نفس الدقيقة</div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-zinc-900/80 border border-zinc-800">
+                <div className="flex items-center justify-between text-zinc-400 mb-1">
+                  <span className="text-xs font-medium">الأجهزة الفريدة (Device IDs)</span>
+                  <Smartphone className="w-4 h-4 text-blue-400" />
+                </div>
+                <div className="text-2xl font-black text-blue-400 font-mono">
+                  {new Set(scanEvents.map((s) => s.deviceId).filter(Boolean)).size}
+                </div>
+                <div className="text-[10px] text-zinc-500 mt-1">أجهزة هواتف مسجلة</div>
+              </div>
+            </div>
+
+            {/* Filter and Search Bar */}
+            <div className="p-4 rounded-2xl bg-zinc-900/90 border border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
+                <button
+                  type="button"
+                  onClick={() => setScansFilter('all')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                    scansFilter === 'all'
+                      ? 'bg-white text-black shadow-md'
+                      : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  الكل ({scanEvents.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScansFilter('accepted')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                    scansFilter === 'accepted'
+                      ? 'bg-[#76FF03] text-black shadow-md'
+                      : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  معتمد ✅ ({scanEvents.filter((s) => s.status !== 'rate_limited').length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScansFilter('rate_limited')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                    scansFilter === 'rate_limited'
+                      ? 'bg-amber-400 text-black shadow-md'
+                      : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  تم صد تكرارها 🛡️ ({scanEvents.filter((s) => s.status === 'rate_limited').length})
+                </button>
+              </div>
+
+              <div className="relative w-full sm:w-64">
+                <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={scansSearchQuery}
+                  onChange={(e) => setScansSearchQuery(e.target.value)}
+                  placeholder="بحث بالمحل، الجيميل أو معرف الجهاز..."
+                  className="w-full pl-8 pr-3 py-1.5 bg-black/60 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#76FF03]"
+                />
+              </div>
+            </div>
+
+            {/* Scans Telemetry List / Table */}
+            <div className="p-4 rounded-3xl bg-zinc-900/90 border border-zinc-800 shadow-xl space-y-2.5">
+              {scanEvents
+                .filter((scan) => {
+                  if (scansFilter === 'accepted' && scan.status === 'rate_limited') return false;
+                  if (scansFilter === 'rate_limited' && scan.status !== 'rate_limited') return false;
+                  if (scansSearchQuery.trim()) {
+                    const q = scansSearchQuery.toLowerCase();
+                    const text = `${scan.restaurantName} ${scan.userEmail || ''} ${scan.userName || ''} ${scan.deviceId || ''}`.toLowerCase();
+                    return text.includes(q);
+                  }
+                  return true;
+                })
+                .slice(0, 50)
+                .map((scan) => (
+                  <div
+                    key={scan.id}
+                    className={`p-3.5 rounded-2xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs ${
+                      scan.status === 'rate_limited'
+                        ? 'bg-amber-950/20 border-amber-800/40 hover:border-amber-500/60'
+                        : 'bg-zinc-950/70 border-zinc-800/90 hover:border-zinc-700'
+                    }`}
+                  >
+                    <div className="flex items-start md:items-center gap-3 min-w-0">
+                      <div
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm shrink-0 font-bold ${
+                          scan.status === 'rate_limited'
+                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                            : 'bg-[#76FF03]/15 text-[#76FF03] border border-[#76FF03]/30'
+                        }`}
+                      >
+                        {scan.status === 'rate_limited' ? (
+                          <ShieldAlert className="w-5 h-5" />
+                        ) : (
+                          <CheckCircle2 className="w-5 h-5" />
+                        )}
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-extrabold text-white text-sm">
+                            {scan.restaurantName}
+                          </span>
+                          {scan.status === 'rate_limited' ? (
+                            <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-400 text-[10px] font-bold border border-amber-500/30 flex items-center gap-1">
+                              <span>تم صد تكرار (&lt; 60 ثانية)</span>
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-md bg-emerald-950/80 text-emerald-400 text-[10px] font-bold border border-emerald-800/40">
+                              مسح معتمد وموثق ✅
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-3 text-zinc-400 text-[11px] mt-1 flex-wrap">
+                          <span className="flex items-center gap-1">
+                            <span className="text-zinc-500">حساب Gmail:</span>
+                            <span className="font-mono text-zinc-200" dir="ltr">
+                              {scan.userEmail || scan.userName || 'غير محدد'}
+                            </span>
+                          </span>
+
+                          <span className="flex items-center gap-1">
+                            <span className="text-zinc-500">معرف الجهاز (Device):</span>
+                            <span className="font-mono text-[#76FF03]" dir="ltr">
+                              {scan.deviceId || 'DEV-BBA-CLIENT'}
+                            </span>
+                            {scan.devicePlatform && (
+                              <span className="text-[10px] text-zinc-500">({scan.devicePlatform})</span>
+                            )}
+                          </span>
+                        </div>
+
+                        {scan.blockReason && (
+                          <div className="text-[10px] text-amber-300/90 mt-1 font-sans">
+                            سبب الصد: {scan.blockReason}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="text-left md:text-right shrink-0 pr-1 md:pr-0">
+                      <div className="text-xs font-mono font-bold text-white" dir="ltr">
+                        {scan.timeStr}
+                      </div>
+                      <div className="text-[10px] text-zinc-500 font-mono">
+                        {scan.dateStr}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+              {scanEvents.length === 0 && (
+                <div className="text-center py-10 text-zinc-500 text-xs">
+                  لا توجد عمليات مسح مسجلة حتى الآن.
+                </div>
+              )}
             </div>
           </div>
         )}

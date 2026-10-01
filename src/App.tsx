@@ -29,6 +29,11 @@ import { NotificationsModal } from './components/NotificationsModal';
 import { WelcomeModal } from './components/WelcomeModal';
 import { markAppAsInstalled } from './services/appUpdateService';
 import { createGoogleUserProfile } from './utils/googleAuthService';
+import {
+  getOrCreateDeviceId,
+  getDevicePlatformInfo,
+  resolveUserEmail,
+} from './services/scanAntiFraudService';
 import confetti from 'canvas-confetti';
 
 const STORAGE_KEY_AUTH = 'pointili_auth_user_v1';
@@ -300,12 +305,20 @@ export default function App() {
 
     setHistory((prev) => [newHistoryItem, ...prev]);
 
-    // Record real persistent scan event for Admin telemetry
+    // Record real persistent scan event with Device ID & Gmail for Admin & Anti-Fraud telemetry
+    const deviceId = getOrCreateDeviceId();
+    const devicePlatform = getDevicePlatformInfo();
+    const userEmail = resolveUserEmail(currentUser);
+
     recordRealScanLog({
       restaurantId: target.id,
       restaurantName: target.nameAr || target.name,
       userId: currentUser?.id,
       userName: currentUser?.name,
+      userEmail,
+      deviceId,
+      devicePlatform,
+      status: 'accepted',
     });
 
     // If unlocked 6/6, record persistent winner item in Admin Winners Log

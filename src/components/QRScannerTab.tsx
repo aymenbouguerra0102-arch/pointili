@@ -37,6 +37,12 @@ import {
   identifyStoreFromQR,
   RegisteredQRStore,
 } from '../data/qrStoreDirectory';
+import {
+  checkScanCooldown,
+  recordDatabaseScan,
+  ScanEligibilityResult,
+  SCAN_COOLDOWN_SECONDS,
+} from '../services/scanAntiFraudService';
 
 interface QRScannerTabProps {
   restaurants: Restaurant[];
@@ -174,6 +180,25 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
   const [appealNote, setAppealNote] = useState<string>('');
   const [appealSent, setAppealSent] = useState<boolean>(false);
 
+  // Anti-Fraud Rate Limiting (60-second cooldown per restaurant & device/account)
+  const [rateLimitResult, setRateLimitResult] = useState<ScanEligibilityResult | null>(null);
+  const [cooldownCountdown, setCooldownCountdown] = useState<number>(0);
+
+  // Live countdown timer for rate limit cooldown
+  useEffect(() => {
+    if (cooldownCountdown <= 0) return;
+    const interval = setInterval(() => {
+      setCooldownCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [cooldownCountdown]);
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -200,20 +225,49 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
     setTorchOn(false);
   }, []);
 
-  // Requirement 2: Generates a Pending Stamp Request (Anti-Fraud)
+  // Requirement 2: Generates a Pending Stamp Request with 60s Anti-Fraud Cooldown
   const handleInitiateStampRequest = useCallback(
     (target: Restaurant) => {
       if (isHandlingScanRef.current) return;
       isHandlingScanRef.current = true;
 
+      // 1. Check Anti-Fraud Rate Limiting (60-second cooldown per restaurant & device/account)
+      const eligibility = checkScanCooldown(target.id, currentUser);
+      if (!eligibility.isAllowed) {
+        // Record rate-limited attempt in persistent database
+        recordDatabaseScan({
+          restaurantId: target.id,
+          restaurantName: target.nameAr || target.name,
+          user: currentUser,
+          status: 'rate_limited',
+          blockReason: eligibility.reason,
+        });
+
+        playErrorTone();
+        navigator.vibrate?.([200, 100, 200, 100, 200]);
+
+        setRateLimitResult(eligibility);
+        setCooldownCountdown(eligibility.secondsRemaining);
+        stopCamera();
+        return;
+      }
+
+      // 2. Scan allowed! Record scan in persistent database with Device ID & Gmail
+      recordDatabaseScan({
+        restaurantId: target.id,
+        restaurantName: target.nameAr || target.name,
+        user: currentUser,
+        status: 'accepted',
+      });
+
       playScanChime();
       navigator.vibrate?.([80, 50, 80]);
 
-      // Create secure pending request with privacy protection
+      // Create secure pending request with privacy protection and device fingerprint
       const displayEmail =
         currentUser?.hideEmailFromPublic && currentUser?.maskedEmail
           ? currentUser.maskedEmail
-          : currentUser?.email || 'customer@gmail.com';
+          : currentUser?.email || eligibility.userEmail;
 
       const req = createStampRequest({
         restaurant: target,
@@ -223,6 +277,8 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
         userAvatar:
           currentUser?.avatarUrl ||
           'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
+        deviceId: eligibility.deviceId,
+        devicePlatform: eligibility.devicePlatform,
       });
 
       setActiveRequest(req);
@@ -780,6 +836,105 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
             >
               <RefreshCw className="w-3.5 h-3.5 text-[#76FF03]" />
               <span>إعادة المحاولة ومسح كود طاولة الكاشير المعتمد</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          ANTI-FRAUD 60-SECOND RATE LIMIT COOLDOWN MODAL
+      ======================================================== */}
+      {rateLimitResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in select-none font-['Plus_Jakarta_Sans']">
+          <div className="w-full max-w-sm bg-zinc-950 border-2 border-amber-500 rounded-3xl p-5 text-center shadow-2xl shadow-amber-500/20 relative overflow-hidden animate-in zoom-in-95">
+            {/* Pulsing Light Glow */}
+            <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-32 h-32 bg-amber-500/20 rounded-full blur-2xl pointer-events-none" />
+
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/15 border-2 border-amber-500 text-amber-400 mx-auto mb-3 flex items-center justify-center shadow-xl shadow-amber-500/25 animate-pulse">
+              <ShieldAlert className="w-8 h-8 stroke-[2.5]" />
+            </div>
+
+            <h3 className="text-base sm:text-lg font-black text-white mb-1">
+              منع المسح المتكرر في نفس الدقيقة ⏱️
+            </h3>
+
+            <p className="text-[12px] text-amber-300 font-medium mb-3">
+              نظام حماية ولاء Pointili: تم مسح كود هذا المحل مسبقاً لحسابك أو جهازك
+            </p>
+
+            {/* Circular Countdown Badge */}
+            <div className="my-3 p-3.5 rounded-2xl bg-black/70 border border-amber-500/30 flex flex-col items-center justify-center">
+              <div className="text-[11px] text-zinc-400 font-bold mb-1">الوقت المتبقي لإعادة المسح:</div>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-3xl font-black text-amber-400">
+                  {cooldownCountdown}
+                </span>
+                <span className="text-xs text-zinc-400 font-bold">ثانية</span>
+              </div>
+              <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden mt-2">
+                <div
+                  className="bg-amber-400 h-full transition-all duration-1000"
+                  style={{ width: `${(cooldownCountdown / SCAN_COOLDOWN_SECONDS) * 100}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Persistent Database Record Telemetry Details */}
+            <div className="p-3 rounded-2xl bg-zinc-900/90 border border-zinc-800 text-xs text-right space-y-1.5 mb-3.5">
+              <div className="flex items-center justify-between text-[11px] pb-1 border-b border-zinc-800">
+                <span className="text-zinc-400">المحل المستهدف:</span>
+                <span className="font-bold text-white truncate max-w-[150px]">
+                  {activeStore?.nameAr || activeStore?.name}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-[11px] pb-1 border-b border-zinc-800">
+                <span className="text-zinc-400">حساب Gmail المسجل:</span>
+                <span className="font-mono text-[10px] text-[#76FF03] font-bold truncate max-w-[160px]" dir="ltr">
+                  {rateLimitResult.userEmail}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-[11px] pb-1 border-b border-zinc-800">
+                <span className="text-zinc-400">معرف الجهاز (Device ID):</span>
+                <span className="font-mono text-[10px] text-zinc-300 truncate max-w-[160px]" dir="ltr">
+                  {rateLimitResult.deviceId}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-zinc-400">وقت المسح السابق:</span>
+                <span className="font-mono text-[10px] text-zinc-400">
+                  {rateLimitResult.lastScanTimeFormatted || 'منذ لحظات'}
+                </span>
+              </div>
+            </div>
+
+            {/* Explanatory security note */}
+            <p className="text-[10px] text-zinc-400 leading-relaxed mb-3.5">
+              لحماية نظام المكافآت ومنع التكرار غير المصرح به، يُسمح بمسح واحد كل 60 ثانية لكل زبون وجهاز. تم توثيق المحاولة في قاعدة البيانات.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => {
+                setRateLimitResult(null);
+                isHandlingScanRef.current = false;
+                startCamera();
+              }}
+              className={`w-full py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer ${
+                cooldownCountdown === 0
+                  ? 'bg-[#76FF03] hover:bg-[#8aff24] text-black shadow-[#76FF03]/25 border border-[#76FF03]'
+                  : 'bg-zinc-850 hover:bg-zinc-800 text-zinc-200 border border-zinc-700'
+              }`}
+            >
+              {cooldownCountdown === 0 ? (
+                <>
+                  <RefreshCw className="w-4 h-4 stroke-[2.5]" />
+                  <span>المسح متاح مجدداً · إعادة المحاولة الآن</span>
+                </>
+              ) : (
+                <>
+                  <span>فهمت ذلك · إغلاق النافذة ({cooldownCountdown}s)</span>
+                </>
+              )}
             </button>
           </div>
         </div>
