@@ -55,6 +55,7 @@ export interface UserProfile {
   tier: string;
   stampsCount?: number;
   rewardsWon?: number;
+  anonymousCode?: string;
 }
 
 export interface AdminStats {

@@ -59,22 +59,25 @@ export default function App() {
   });
   const [showAdminLogin, setShowAdminLogin] = useState<boolean>(false);
 
-  // Customer Auth State - Strictly locked until genuine Gmail login
+  // Customer Auth State - Private Anonymous or Nickname Access
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_AUTH);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (
-          parsed &&
-          parsed.email &&
-          !parsed.email.includes('alex.rivera') &&
-          parsed.id !== 'usr_pointili_882'
-        ) {
+        if (parsed && parsed.id) {
+          // Sanitize old test accounts with real emails
+          if (
+            parsed.email?.includes('aymenbouguerra') ||
+            parsed.email?.includes('alex.rivera') ||
+            parsed.id === 'usr_pointili_882'
+          ) {
+            localStorage.removeItem(STORAGE_KEY_AUTH);
+            return null;
+          }
           return parsed;
         }
       }
-      localStorage.removeItem(STORAGE_KEY_AUTH);
       return null;
     } catch {
       return null;

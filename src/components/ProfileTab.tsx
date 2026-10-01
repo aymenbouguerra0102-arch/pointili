@@ -77,7 +77,14 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
               </h2>
               <span className="w-2 h-2 rounded-full bg-[#76FF03]" />
             </div>
-            <p className="text-xs text-zinc-400 font-mono truncate">{user.email}</p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-[11px] text-[#76FF03] font-mono font-bold" dir="ltr">
+                {user.anonymousCode || user.id.replace('usr_', '').toUpperCase()}
+              </span>
+              <span className="text-[10px] text-zinc-400 font-sans">
+                (معرّف خاص ومشفر 🛡️)
+              </span>
+            </div>
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               <span className="text-[11px] font-bold text-zinc-900 bg-[#76FF03] px-2 py-0.5 rounded-md">
                 {user.tier}
@@ -91,16 +98,16 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
 
         {/* Member ID Quick Copy */}
         <div className="mt-4 pt-3 border-t border-zinc-800 flex items-center justify-between text-xs text-zinc-400">
-          <span className="font-mono text-[11px]">ID: {user.id}</span>
+          <span className="font-mono text-[11px]" dir="ltr">CODE: {user.anonymousCode || user.id}</span>
           <button
             onClick={() => {
-              navigator.clipboard?.writeText(user.id);
+              navigator.clipboard?.writeText(user.anonymousCode || user.id);
               setCopiedId(true);
               setTimeout(() => setCopiedId(false), 2000);
             }}
             className="text-[11px] text-[#76FF03] hover:underline cursor-pointer"
           >
-            {copiedId ? 'تم النسخ!' : 'نسخ المعرف'}
+            {copiedId ? 'تم النسخ!' : 'نسخ الكود الخاص'}
           </button>
         </div>
       </div>

@@ -321,9 +321,9 @@ export function getRealMetricsSummary(restaurants: Restaurant[]) {
 export function seedRealBBAActivity(restaurants: Restaurant[], users: UserProfile[]): void {
   const sampleUsers = users.length > 0 ? users : [
     {
-      id: 'usr_bba_aymen',
-      name: 'Aymen Bouguerra',
-      email: 'aymenbouguerra0102@gmail.com',
+      id: 'usr_bba_guest_34',
+      name: 'زبون Pointili #3401',
+      email: 'pt-3401@pointili.app',
       avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
       memberSince: 'سبتمبر 2026',
       stampsCount: 6,
