@@ -86,7 +86,7 @@ export function authenticateMerchantOrAdmin(
       if (trimmedPass !== '1234' && trimmedPass.toLowerCase() !== (matched.qrSecretCode || '').toLowerCase()) {
         return {
           success: false,
-          error: 'كلمة المرور غير صحيحة. كلمة المرور الافتراضية للمراجعة هي (1234).',
+          error: 'كلمة المرور غير صحيحة. يرجى إدخال كلمة المرور المعتمدة الخاصة بالمراجعة.',
         };
       }
 

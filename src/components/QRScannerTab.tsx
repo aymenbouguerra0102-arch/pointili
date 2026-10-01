@@ -848,7 +848,7 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
                 </h3>
 
                 <p className="text-xs text-zinc-400 mb-4 leading-relaxed">
-                  تم إرسال طلبك إلى شاشة كاشير <strong className="text-amber-300">{activeRequest.restaurantName}</strong>. يرجى إعلام الكاشير لتأكيد طلبك بكلمة المرور (1234).
+                  تم إرسال طلبك بنجاح إلى شاشة كاشير <strong className="text-amber-300">{activeRequest.restaurantName}</strong>. يرجى التوجه إلى الكاشير ليقوم بالتحقق من هويتك وتأكيد زيارتك.
                 </p>
 
                 {/* Request Verification Details */}
@@ -880,24 +880,11 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (activeRequest) {
-                        updateStampRequestStatus(activeRequest.id, 'accepted');
-                      }
-                    }}
-                    className="w-full py-2.5 px-3 rounded-xl bg-[#76FF03]/15 hover:bg-[#76FF03]/25 border border-[#76FF03]/40 text-[#76FF03] text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                  >
-                    <ShieldCheck className="w-4 h-4 text-[#76FF03]" />
-                    <span>محاكاة موافقة التاجر الفورية (كلمة المرور 1234)</span>
-                  </button>
-
+                <div>
                   <button
                     type="button"
                     onClick={handleDismissPending}
-                    className="w-full py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-850 text-zinc-400 hover:text-white text-xs font-semibold border border-zinc-800 transition-colors cursor-pointer"
+                    className="w-full py-3 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-850 text-zinc-400 hover:text-white text-xs font-semibold border border-zinc-800 transition-colors cursor-pointer"
                   >
                     إلغاء الطلب والعودة للمسح
                   </button>
