@@ -6,19 +6,12 @@ import {
   QrCode,
   Gift,
   Smartphone,
-  CheckCircle2,
   ArrowRight,
   ShieldCheck,
   Lock,
-  Mail,
-  Fingerprint,
-  RefreshCw,
-  EyeOff,
-  UserCheck,
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { useLanguage, LanguageSelector } from '../i18n/LanguageContext';
-import { GoogleAuthModal } from './GoogleAuthModal';
 import {
   OFFICIAL_GOOGLE_CLIENT_ID,
   parseJwt,
@@ -33,7 +26,6 @@ interface AuthScreenProps {
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onOpenAdminLogin }) => {
   const { t, language } = useLanguage();
-  const [showGoogleModal, setShowGoogleModal] = useState(false);
   const [savedUserEmail, setSavedUserEmail] = useState<string | null>(null);
   const [savedUserName, setSavedUserName] = useState<string | null>(null);
   const googleBtnContainerRef = useRef<HTMLDivElement>(null);
@@ -276,16 +268,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onOpenAdminLogi
                 data-locale="ar"
               />
             </div>
-
-            {/* Instant Backup Button to ensure 100% reliability in all browsers */}
-            <button
-              type="button"
-              onClick={() => setShowGoogleModal(true)}
-              className="mt-3 w-full py-2.5 px-3 rounded-xl bg-zinc-800/80 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
-            >
-              <Fingerprint className="w-4 h-4 text-[#76FF03]" />
-              <span>تسجيل الدخول السريع أو تخصيص الاسم المستعار</span>
-            </button>
           </div>
 
           {/* PRIVACY SHIELD GUARANTEE BOX */}
@@ -343,13 +325,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onOpenAdminLogi
           <span>{t.adminPortal}</span>
         </button>
       </footer>
-
-      {/* Google Sign-In with Privacy Shield Modal */}
-      <GoogleAuthModal
-        isOpen={showGoogleModal}
-        onClose={() => setShowGoogleModal(false)}
-        onLogin={onLogin}
-      />
     </div>
   );
 };
