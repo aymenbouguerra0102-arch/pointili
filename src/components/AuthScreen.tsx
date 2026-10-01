@@ -10,12 +10,12 @@ import {
   ArrowRight,
   UserCheck,
   Lock,
-  KeyRound,
   ShieldCheck,
-  RefreshCw,
+  Fingerprint,
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { useLanguage, LanguageSelector } from '../i18n/LanguageContext';
+import { GoogleAuthModal } from './GoogleAuthModal';
 
 interface AuthScreenProps {
   onLogin: (user: UserProfile) => void;
@@ -30,51 +30,13 @@ function generateRandomCustomerCode(): string {
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onOpenAdminLogin }) => {
   const { t, language } = useLanguage();
-  const [activeMode, setActiveMode] = useState<'instant' | 'custom'>('instant');
+  const [activeMode, setActiveMode] = useState<'google' | 'custom'>('google');
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
   const [customName, setCustomName] = useState('');
   const [customCode, setCustomCode] = useState('');
-  const [suggestedCode, setSuggestedCode] = useState(generateRandomCustomerCode());
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleRefreshSuggestedCode = () => {
-    setSuggestedCode(generateRandomCustomerCode());
-  };
-
-  // 1. Instant Private Access (Random Anonymous Identifier)
-  const handleInstantLogin = () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      const code = suggestedCode;
-      const serialNum = code.replace('PT-BBA-', '');
-      const initials = `P${serialNum.slice(0, 2)}`;
-      
-      const avatarColors = ['10b981', '06b6d4', '8b5cf6', 'f59e0b', 'ec4899'];
-      const color = avatarColors[parseInt(serialNum, 10) % avatarColors.length];
-      const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-        `PT ${serialNum}`
-      )}&background=${color}&color=ffffff&bold=true&rounded=true&size=200`;
-
-      const privateUser: UserProfile = {
-        id: `usr_${code.toLowerCase().replace(/-/g, '_')}`,
-        name: language === 'ar' ? `زبون Pointili #${serialNum}` : `Pointili Guest #${serialNum}`,
-        email: `${code.toLowerCase()}@pointili.app`,
-        avatarUrl,
-        memberSince: new Date().toLocaleDateString(language === 'ar' ? 'ar-DZ' : 'fr-DZ', {
-          month: 'long',
-          year: 'numeric',
-        }),
-        tier: language === 'ar' ? 'زبون VIP خاص (معرّف مشفر)' : 'Private VIP Pass',
-        stampsCount: 0,
-        rewardsWon: 0,
-        anonymousCode: code,
-      };
-
-      setIsLoading(false);
-      onLogin(privateUser);
-    }, 350);
-  };
-
-  // 2. Custom Nickname or Existing ID Access
+  // Custom Nickname Access
   const handleCustomLogin = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedName = customName.trim();
@@ -169,76 +131,126 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onOpenAdminLogi
           <div className="grid grid-cols-2 gap-1.5 p-1 bg-black/60 rounded-2xl border border-zinc-800 mb-4">
             <button
               type="button"
-              onClick={() => setActiveMode('instant')}
-              className={`py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                activeMode === 'instant'
-                  ? 'bg-[#76FF03] text-black shadow-md shadow-[#76FF03]/20'
+              onClick={() => setActiveMode('google')}
+              className={`py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 truncate ${
+                activeMode === 'google'
+                  ? 'bg-white text-black shadow-md shadow-white/10'
                   : 'text-zinc-400 hover:text-white'
               }`}
             >
-              <KeyRound className="w-3.5 h-3.5" />
-              <span>دخول فوري مجهول</span>
+              <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.36 24 12 24z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.98 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.36 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                />
+              </svg>
+              <span>حساب Google (آمن وخاص)</span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveMode('custom')}
-              className={`py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              className={`py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 truncate ${
                 activeMode === 'custom'
                   ? 'bg-[#76FF03] text-black shadow-md shadow-[#76FF03]/20'
                   : 'text-zinc-400 hover:text-white'
               }`}
             >
-              <UserCheck className="w-3.5 h-3.5" />
-              <span>اسم مستعار / كودك</span>
+              <UserCheck className="w-3.5 h-3.5 shrink-0" />
+              <span>اسم مستعار (Nickname)</span>
             </button>
           </div>
 
-          {/* TAB 1: INSTANT PRIVATE ACCESS (No password, no email, just a private code) */}
-          {activeMode === 'instant' && (
+          {/* TAB 1: REAL GOOGLE SIGN-IN WITH PRIVACY PROTECTION */}
+          {activeMode === 'google' && (
             <div className="space-y-4">
-              <div className="p-3.5 rounded-2xl bg-black/70 border border-zinc-800 text-center">
-                <div className="text-[11px] text-zinc-400 font-medium mb-1">
-                  كود الزبون الخاص والمشفر المقترح لك:
-                </div>
-                <div className="flex items-center justify-center gap-2">
-                  <span className="font-mono text-lg font-black tracking-widest text-[#76FF03] bg-[#76FF03]/10 px-3 py-1 rounded-xl border border-[#76FF03]/30" dir="ltr">
-                    {suggestedCode}
+              <div className="p-4 rounded-2xl bg-black/70 border border-zinc-800 text-center relative overflow-hidden">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <div className="w-7 h-7 rounded-lg bg-white/10 border border-white/20 p-1 flex items-center justify-center">
+                    <svg className="w-full h-full" viewBox="0 0 24 24">
+                      <path
+                        fill="#4285F4"
+                        d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.36 24 12 24z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.98 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+                      />
+                      <path
+                        fill="#EA4335"
+                        d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.36 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                      />
+                    </svg>
+                  </div>
+                  <span className="text-sm font-black text-white">تسجيل الدخول بـ Google ID</span>
+                  <span className="px-2 py-0.5 rounded-full bg-[#76FF03] text-black text-[10px] font-black">
+                    خصوصية 100%
                   </span>
-                  <button
-                    type="button"
-                    onClick={handleRefreshSuggestedCode}
-                    className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer"
-                    title="توليد كود آخر"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                  </button>
                 </div>
-                <p className="text-[10px] text-zinc-500 mt-1.5">
-                  هذا الكود هو هويتك الرقمية الخاصة لجمع الأختام واستبدال الهدايا بسرية تامة.
+
+                <p className="text-xs text-zinc-300 leading-relaxed mb-3.5">
+                  تسجيل دخول حقيقي موثق يتعرف على هويتك بأمان دون كشف بريدك الشخصي للكاشير أو المطاعم.
                 </p>
+
+                {/* Primary Google Login Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowGoogleModal(true)}
+                  className="w-full py-3.5 px-4 rounded-2xl bg-white hover:bg-zinc-100 text-black font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2.5 shadow-xl shadow-white/10 active:scale-[0.98] transition-all cursor-pointer"
+                >
+                  <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.36 24 12 24z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.98 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.36 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                    />
+                  </svg>
+                  <span>المتابعة بحساب Google (محمي وخاص)</span>
+                  <ArrowRight className="w-4 h-4 text-black" />
+                </button>
               </div>
 
-              <button
-                type="button"
-                onClick={handleInstantLogin}
-                disabled={isLoading}
-                className="w-full py-3.5 px-4 rounded-2xl bg-[#76FF03] hover:bg-[#8aff24] active:scale-[0.98] text-black font-black text-sm flex items-center justify-center gap-2 shadow-xl shadow-[#76FF03]/25 transition-all cursor-pointer border border-[#76FF03]"
-              >
-                {isLoading ? (
-                  <span className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 stroke-[2.5]" />
-                    <span>دخول فوري خاص وآمن (بدون كشف الهوية)</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
+              {/* Privacy Shield Info Card */}
+              <div className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800 text-[11px] text-zinc-400 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-[#76FF03]">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>حماية الخصوصية نشطة تلقائياً</span>
+                </div>
+                <p className="text-[10px] text-zinc-400 leading-relaxed pr-5">
+                  يتم تشفير بريدك وإظهار كود معرّف Google فريد فقط أمام الكاشير، مع حفظ أختامك ونقاطك بأمان تام.
+                </p>
+              </div>
             </div>
           )}
 
-          {/* TAB 2: CHOOSE NICKNAME OR ENTER CUSTOM CODE */}
+          {/* TAB 2: CHOOSE NICKNAME */}
           {activeMode === 'custom' && (
             <form onSubmit={handleCustomLogin} className="space-y-3.5">
               <div>
@@ -327,6 +339,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onOpenAdminLogi
           <span>{t.adminPortal}</span>
         </button>
       </footer>
+
+      {/* Google Sign-In with Privacy Shield Modal */}
+      <GoogleAuthModal
+        isOpen={showGoogleModal}
+        onClose={() => setShowGoogleModal(false)}
+        onLogin={onLogin}
+      />
     </div>
   );
 };

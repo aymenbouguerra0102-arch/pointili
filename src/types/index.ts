@@ -56,6 +56,10 @@ export interface UserProfile {
   stampsCount?: number;
   rewardsWon?: number;
   anonymousCode?: string;
+  isGoogleAuth?: boolean;
+  maskedEmail?: string;
+  hideEmailFromPublic?: boolean;
+  googleSub?: string;
 }
 
 export interface AdminStats {

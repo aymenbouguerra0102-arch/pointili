@@ -209,11 +209,16 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
       playScanChime();
       navigator.vibrate?.([80, 50, 80]);
 
-      // Create secure pending request
+      // Create secure pending request with privacy protection
+      const displayEmail =
+        currentUser?.hideEmailFromPublic && currentUser?.maskedEmail
+          ? currentUser.maskedEmail
+          : currentUser?.email || 'customer@gmail.com';
+
       const req = createStampRequest({
         restaurant: target,
         userId: currentUser?.id || 'usr_anonymous',
-        userEmail: currentUser?.email || 'customer@gmail.com',
+        userEmail: displayEmail,
         userName: currentUser?.name || 'زبون Pointili',
         userAvatar:
           currentUser?.avatarUrl ||
