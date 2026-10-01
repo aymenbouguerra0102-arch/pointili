@@ -28,7 +28,17 @@ import {
   Coffee,
   Filter,
   XCircle,
+  Bell,
+  Send,
+  Volume2,
 } from 'lucide-react';
+import {
+  CURRENT_APP_VERSION,
+  LAST_RELEASE_DATE,
+  broadcastAppRenewalUpdate,
+  getStoredNotifications,
+  playAppUpdateChime,
+} from '../services/appUpdateService';
 import {
   getRegisteredUsers,
   getRealWinnersLog,
@@ -71,12 +81,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onSimulateScan,
   onApproveStampToUser,
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'restaurants' | 'requests' | 'winners' | 'users'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'restaurants' | 'requests' | 'winners' | 'users' | 'updates'>('overview');
   const [requestsList, setRequestsList] = useState<StampRequest[]>(() => getStampRequests());
   const [requestsFilter, setRequestsFilter] = useState<'all' | 'pending' | 'appealed' | 'accepted' | 'rejected'>('all');
   const [isAddPartnerOpen, setIsAddPartnerOpen] = useState(false);
   const [merchantStandOpen, setMerchantStandOpen] = useState(false);
   const [selectedRestForQR, setSelectedRestForQR] = useState<Restaurant | null>(null);
+
+  // App Renewal Broadcast State
+  const [broadcastTitle, setBroadcastTitle] = useState('🎉 تم تجديد تطبيق Pointili بإصدار جديد!');
+  const [broadcastBody, setBroadcastBody] = useState('تم تجديد التطبيق بالكامل بميزات أمان متقدمة، شريط إعلانات تفاعلي، ومسح مباشر لأكواد طاولات الكاشير.');
+  const [broadcastVersion, setBroadcastVersion] = useState(CURRENT_APP_VERSION);
+  const [broadcastSuccess, setBroadcastSuccess] = useState(false);
 
   // Filters
   const [restaurantCategoryFilter, setRestaurantCategoryFilter] = useState<'all' | 'fast_food' | 'cafes'>('all');
@@ -327,6 +343,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <Users className="w-4 h-4" />
               <span>Registered Accounts ({usersList.length})</span>
             </button>
+
+            <button
+              onClick={() => setActiveTab('updates')}
+              className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
+                activeTab === 'updates'
+                  ? 'bg-[#76FF03] text-black shadow-md shadow-[#76FF03]/20'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Bell className="w-4 h-4 text-[#76FF03]" />
+              <span>إشعار التجديد لجميع المحمّلين (Broadcast)</span>
+            </button>
           </div>
 
           {/* Quick Simulation & Utility Controls */}
@@ -445,6 +473,53 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <div className="text-[11px] text-zinc-500 font-sans mt-0.5">
                   محلات ولاية برج بوعريريج المعتمدة
                 </div>
+              </div>
+            </div>
+
+            {/* Quick App Renewal Broadcast Banner */}
+            <div className="p-5 rounded-3xl bg-gradient-to-r from-zinc-900 via-zinc-900/90 to-zinc-950 border border-[#76FF03]/40 shadow-xl flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-[#76FF03]/15 border border-[#76FF03]/40 flex items-center justify-center text-[#76FF03] shrink-0">
+                  <Bell className="w-6 h-6 animate-pulse" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-extrabold text-white">
+                      إرسال إشعار تجديد التطبيق لجميع من قام بالتحميل (Broadcast Renewal)
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full bg-[#76FF03] text-black text-[10px] font-black font-mono">
+                      {CURRENT_APP_VERSION}
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    إرسال تنبيه فوري ونغمة كريستالية لجميع من قام بتحميل وتثبيت التطبيق لإعلامهم بالتجديد الجديد
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    broadcastAppRenewalUpdate({
+                      titleAr: '🎉 تم تجديد تطبيق Pointili بإصدار جديد!',
+                      bodyAr: 'تم تحديث ميزات الأمان والخصوصية وشريط الإعلانات التفاعلي لجميع المحمّلين.',
+                      version: CURRENT_APP_VERSION,
+                    });
+                    showToast('✓ تم إرسال إشعار التجديد لجميع من قام بتحميل التطبيق بنجاح! 🔔');
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-[#76FF03] hover:bg-[#8aff24] active:scale-98 text-black text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-[#76FF03]/20"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>إرسال إشعار التجديد الفوري للجميع 📢</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('updates')}
+                  className="px-3.5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-bold text-zinc-200 hover:text-white transition-colors cursor-pointer"
+                >
+                  لوحة التحكم بالإشعارات ←
+                </button>
               </div>
             </div>
 
@@ -1346,6 +1421,214 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </table>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* App Renewal & Push Notifications Broadcast Tab */}
+        {activeTab === 'updates' && (
+          <div className="space-y-6">
+            {/* Header Card */}
+            <div className="p-6 rounded-3xl bg-zinc-900/90 border border-zinc-800 shadow-xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-80 h-80 bg-[#76FF03]/10 rounded-full blur-3xl pointer-events-none" />
+
+              <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-14 h-14 rounded-2xl bg-[#76FF03]/15 border border-[#76FF03] flex items-center justify-center text-[#76FF03] shadow-lg shadow-[#76FF03]/10">
+                    <Bell className="w-7 h-7" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-xl font-extrabold text-white">
+                        مركز إرسال إشعارات التجديد لجميع المحمّلين
+                      </h2>
+                      <span className="px-2.5 py-0.5 rounded-full bg-[#76FF03] text-black text-xs font-black font-mono">
+                        BROADCAST PUSH
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      إرسال إشعار فوري صوتي ونظامي مع نغمة كريستالية واهتزاز لجميع من قام بتحميل وتثبيت التطبيق على هواتفهم
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <div className="text-[11px] text-zinc-500 font-mono">حالة الخدمة</div>
+                    <div className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 justify-end">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      <span>متصل بالشبكة (100% Active)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Metrics Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="p-5 rounded-3xl bg-zinc-900/80 border border-zinc-800">
+                <div className="text-xs text-zinc-400">إجمالي مستخدمي ومحمّلي التطبيق</div>
+                <div className="text-2xl font-black text-white font-mono mt-1">
+                  {usersList.length} <span className="text-sm text-[#76FF03]">محمّل نشط</span>
+                </div>
+                <div className="text-[11px] text-zinc-500 mt-0.5">
+                  يتلقون الإشعار فورياً في شريط التنبيهات
+                </div>
+              </div>
+
+              <div className="p-5 rounded-3xl bg-zinc-900/80 border border-zinc-800">
+                <div className="text-xs text-zinc-400">الإصدار الجاري بثه</div>
+                <div className="text-2xl font-black text-[#76FF03] font-mono mt-1">
+                  {broadcastVersion}
+                </div>
+                <div className="text-[11px] text-zinc-500 mt-0.5">
+                  تاريخ الإطلاق: {LAST_RELEASE_DATE}
+                </div>
+              </div>
+
+              <div className="p-5 rounded-3xl bg-zinc-900/80 border border-zinc-800">
+                <div className="text-xs text-zinc-400">وسائل التنبيه المدعومة</div>
+                <div className="text-sm font-bold text-white mt-2 flex items-center gap-2 flex-wrap">
+                  <span className="px-2 py-0.5 rounded-lg bg-zinc-800 text-[11px] text-zinc-300">نغمة صوتية Web Audio</span>
+                  <span className="px-2 py-0.5 rounded-lg bg-zinc-800 text-[11px] text-zinc-300">Push Notification</span>
+                  <span className="px-2 py-0.5 rounded-lg bg-zinc-800 text-[11px] text-zinc-300">اهتزاز الهاتف</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Broadcast Form Card */}
+            <div className="p-6 rounded-3xl bg-zinc-900/90 border border-zinc-800 space-y-5">
+              <h3 className="text-sm font-black text-white flex items-center gap-2">
+                <Send className="w-4 h-4 text-[#76FF03]" />
+                <span>صياغة وبث إشعار التجديد لكافة المستخدمين:</span>
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-zinc-300 mb-1.5">
+                    رقم الإصدار (Version):
+                  </label>
+                  <input
+                    type="text"
+                    value={broadcastVersion}
+                    onChange={(e) => setBroadcastVersion(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white font-mono text-xs focus:border-[#76FF03] outline-none"
+                    placeholder="v2.5.0"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-zinc-300 mb-1.5">
+                    عنوان إشعار التجديد:
+                  </label>
+                  <input
+                    type="text"
+                    value={broadcastTitle}
+                    onChange={(e) => setBroadcastTitle(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white text-xs font-bold focus:border-[#76FF03] outline-none"
+                    placeholder="عنوان الإشعار..."
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-300 mb-1.5">
+                  نص رسالة التجديد (يظهر على شاشة القفل وشريط التنبيهات):
+                </label>
+                <textarea
+                  rows={3}
+                  value={broadcastBody}
+                  onChange={(e) => setBroadcastBody(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white text-xs leading-relaxed focus:border-[#76FF03] outline-none resize-none"
+                  placeholder="نص رسالة التجديد..."
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    broadcastAppRenewalUpdate({
+                      titleAr: broadcastTitle,
+                      bodyAr: broadcastBody,
+                      version: broadcastVersion,
+                    });
+                    setBroadcastSuccess(true);
+                    showToast('✓ تم بنجاح إرسال إشعار التجديد لجميع من قام بتحميل التطبيق!');
+                    setTimeout(() => setBroadcastSuccess(false), 4000);
+                  }}
+                  className="px-6 py-3 rounded-2xl bg-[#76FF03] hover:bg-[#8aff24] active:scale-98 text-black text-xs font-black flex items-center gap-2 shadow-lg shadow-[#76FF03]/25 transition-all cursor-pointer"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>إرسال إشعار التجديد لجميع المحمّلين الآن 📢</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    playAppUpdateChime();
+                    showToast('🔔 تم تشغيل نغمة الكريستال وهز الجهاز للتجربة!');
+                  }}
+                  className="px-4 py-3 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white border border-zinc-700 text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <Volume2 className="w-4 h-4 text-[#76FF03]" />
+                  <span>تجربة نغمة الإشعار على جهازي</span>
+                </button>
+
+                {broadcastSuccess && (
+                  <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 animate-in fade-in">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>تم البث بنجاح إلى جميع النوافذ والأجهزة!</span>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Broadcast History Log */}
+            <div className="p-6 rounded-3xl bg-zinc-900/80 border border-zinc-800 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-[#76FF03]" />
+                  <span>سجل الإشعارات المرسلة مؤخراً للمحمّلين:</span>
+                </h3>
+                <span className="text-xs text-zinc-500 font-mono">
+                  {getStoredNotifications().length} إشعارات مسجلة
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                {getStoredNotifications().slice(0, 5).map((notif) => (
+                  <div
+                    key={notif.id}
+                    className="p-4 rounded-2xl bg-zinc-950/80 border border-zinc-800 flex items-start justify-between gap-3 text-xs"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-white">{notif.titleAr || notif.title}</span>
+                        {notif.version && (
+                          <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-[10px] text-[#76FF03] font-mono">
+                            {notif.version}
+                          </span>
+                        )}
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-400 text-[10px] font-bold border border-emerald-800/40">
+                          تم التسليم للمحمّلين
+                        </span>
+                      </div>
+                      <p className="text-zinc-400 text-[11px] mt-1 pr-1">
+                        {notif.bodyAr || notif.body}
+                      </p>
+                    </div>
+
+                    <span className="text-[10px] text-zinc-500 font-mono shrink-0">
+                      {new Date(notif.timestamp).toLocaleTimeString('ar-DZ', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}

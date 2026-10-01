@@ -1,9 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Restaurant, UserProfile } from '../types';
 import { StampCard } from './StampCard';
-import { Search, Sparkles, Plus, Gift, Filter, Store, Shield, MapPin } from 'lucide-react';
+import { Search, Sparkles, Plus, Gift, Filter, Store, Shield, MapPin, Bell } from 'lucide-react';
 import { PointiliLogo } from './PointiliLogo';
+import { PromoCarousel } from './PromoCarousel';
 import { useLanguage, LanguageSelector } from '../i18n/LanguageContext';
+import {
+  getStoredNotifications,
+  checkForUnseenAppUpdate,
+  setupUpdateSync,
+} from '../services/appUpdateService';
 
 interface CardsDashboardProps {
   user: UserProfile;
@@ -15,6 +21,8 @@ interface CardsDashboardProps {
   onOpenMerchantQR: () => void;
   onOpenAdminLogin?: () => void;
   onOpenInstallModal?: () => void;
+  onOpenNotifications?: () => void;
+  onOpenUpdateModal?: () => void;
 }
 
 export const CardsDashboard: React.FC<CardsDashboardProps> = ({
@@ -27,10 +35,42 @@ export const CardsDashboard: React.FC<CardsDashboardProps> = ({
   onOpenMerchantQR,
   onOpenAdminLogin,
   onOpenInstallModal,
+  onOpenNotifications,
+  onOpenUpdateModal,
 }) => {
   const { t, language } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'ready' | 'cafes' | 'food'>('all');
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(() => {
+    const list = getStoredNotifications();
+    return list.filter((n) => !n.read).length;
+  });
+  const [hasNewUpdate, setHasNewUpdate] = useState<boolean>(() => checkForUnseenAppUpdate());
+
+  useEffect(() => {
+    const updateCount = () => {
+      const list = getStoredNotifications();
+      setUnreadNotificationsCount(list.filter((n) => !n.read).length);
+      setHasNewUpdate(checkForUnseenAppUpdate());
+    };
+
+    const unsubscribe = setupUpdateSync(() => {
+      updateCount();
+    });
+
+    const handleCustomEvent = () => {
+      updateCount();
+    };
+
+    window.addEventListener('pointili:notifications-updated', handleCustomEvent);
+    window.addEventListener('pointili:app-updated', handleCustomEvent);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('pointili:notifications-updated', handleCustomEvent);
+      window.removeEventListener('pointili:app-updated', handleCustomEvent);
+    };
+  }, []);
 
   // Completed rewards ready to claim
   const readyRewards = restaurants.filter((r) => r.stampsCount >= 6);
@@ -87,6 +127,22 @@ export const CardsDashboard: React.FC<CardsDashboardProps> = ({
           {/* Multi-language Selector (العربية, Français, English) */}
           <LanguageSelector compact={false} />
 
+          {/* Notifications & App Updates Bell */}
+          <button
+            type="button"
+            onClick={onOpenNotifications || onOpenUpdateModal}
+            className="relative p-2 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-[#76FF03]/80 text-zinc-300 hover:text-white transition-all cursor-pointer flex items-center justify-center shadow-sm"
+            title="إشعارات التجديد والتحديثات"
+          >
+            <Bell className="w-4 h-4 text-zinc-300" />
+            {(unreadNotificationsCount > 0 || hasNewUpdate) && (
+              <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#76FF03] opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-[#76FF03] border-2 border-zinc-950"></span>
+              </span>
+            )}
+          </button>
+
           {/* Phone Desktop App Icon / Install */}
           {onOpenInstallModal && (
             <button
@@ -134,49 +190,14 @@ export const CardsDashboard: React.FC<CardsDashboardProps> = ({
         </div>
       </div>
 
-      {/* Wilaya Bordj Bou Arreridj Regional Banner */}
-      <div className="p-3.5 rounded-2xl bg-zinc-900/90 border border-zinc-800 mb-3.5 backdrop-blur-md relative overflow-hidden">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-[11px] font-bold text-[#76FF03] flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-[#76FF03]" />
-              <span>{t.wilayaName}</span>
-            </div>
-            <h1 className="text-base font-extrabold text-white tracking-tight mt-0.5">
-              {t.dashboardTitle}
-            </h1>
-            <p className="text-[11px] text-zinc-400 mt-0.5 line-clamp-1">
-              {t.dashboardSubtitle}
-            </p>
-          </div>
-
-          <button
-            onClick={onOpenDiscover}
-            className="px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-semibold text-xs flex items-center gap-1 transition-colors border border-zinc-700/60 shrink-0 cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5 text-[#76FF03]" />
-            <span>{t.discoverMore}</span>
-          </button>
-        </div>
-
-        {/* Quick Notification if rewards are unlocked */}
-        {readyRewards.length > 0 && (
-          <div className="mt-2.5 pt-2.5 border-t border-zinc-800 flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[#76FF03] animate-ping" />
-              <span className="font-bold text-[#76FF03]">
-                {readyRewards.length} {t.rewardUnlocked}
-              </span>
-            </div>
-            <button
-              onClick={() => setActiveFilter('ready')}
-              className="text-[11px] font-semibold text-zinc-300 hover:text-white underline cursor-pointer"
-            >
-              {t.claimReward}
-            </button>
-          </div>
-        )}
-      </div>
+      {/* Animated Interactive Carousel / Slider for Announcements, Venues & Features */}
+      <PromoCarousel
+        restaurants={restaurants}
+        readyRewardsCount={readyRewards.length}
+        onOpenDiscover={onOpenDiscover}
+        onSelectRestaurant={onSelectRestaurant}
+        onFilterChange={(filter) => setActiveFilter(filter)}
+      />
 
       {/* Search Input */}
       <div className="relative mb-3">

@@ -15,10 +15,13 @@ import {
   CheckCircle,
   Globe,
   Check,
+  Bell,
+  Sparkles,
 } from 'lucide-react';
 import { PointiliLogo } from './PointiliLogo';
 import { useLanguage } from '../i18n/LanguageContext';
 import { Language } from '../i18n/translations';
+import { CURRENT_APP_VERSION } from '../services/appUpdateService';
 
 interface ProfileTabProps {
   user: UserProfile;
@@ -30,6 +33,7 @@ interface ProfileTabProps {
   onAddMorePlaces: () => void;
   onOpenAdminLogin: () => void;
   onOpenInstallModal?: () => void;
+  onOpenUpdateModal?: () => void;
 }
 
 export const ProfileTab: React.FC<ProfileTabProps> = ({
@@ -42,6 +46,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
   onAddMorePlaces,
   onOpenAdminLogin,
   onOpenInstallModal,
+  onOpenUpdateModal,
 }) => {
   const { t, language, setLanguage } = useLanguage();
   const [copiedId, setCopiedId] = useState(false);
@@ -215,6 +220,33 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
                 </div>
                 <div className="text-[11px] text-zinc-400">
                   {t.showHomeScreenDesc}
+                </div>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-zinc-500" />
+          </button>
+        )}
+
+        {/* App Renewal & Push Updates Row */}
+        {onOpenUpdateModal && (
+          <button
+            type="button"
+            onClick={onOpenUpdateModal}
+            className="w-full p-3 flex items-center justify-between text-left hover:bg-zinc-850 rounded-xl transition-colors cursor-pointer group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-[#76FF03]/15 border border-[#76FF03]/30 flex items-center justify-center text-[#76FF03] group-hover:scale-105 transition-transform">
+                <Bell className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-white group-hover:text-[#76FF03] transition-colors flex items-center gap-1.5">
+                  <span>إشعارات تجديد وتحديث التطبيق</span>
+                  <span className="px-1.5 py-0.2 rounded-md bg-[#76FF03] text-black text-[9px] font-mono font-bold">
+                    {CURRENT_APP_VERSION}
+                  </span>
+                </div>
+                <div className="text-[11px] text-zinc-400">
+                  إرسال تنبيه فوري تلقائياً لكل من قام بتحميل التطبيق عند كل تجديد
                 </div>
               </div>
             </div>

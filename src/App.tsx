@@ -23,6 +23,10 @@ import { AdminLogin } from './components/AdminLogin';
 import { AdminDashboard } from './components/AdminDashboard';
 import { MerchantDashboard } from './components/MerchantDashboard';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
+import { AppUpdateBanner } from './components/AppUpdateBanner';
+import { AppUpdateModal } from './components/AppUpdateModal';
+import { NotificationsModal } from './components/NotificationsModal';
+import { markAppAsInstalled } from './services/appUpdateService';
 import confetti from 'canvas-confetti';
 
 const STORAGE_KEY_AUTH = 'pointili_auth_user_v1';
@@ -123,6 +127,24 @@ export default function App() {
   const [merchantQROpen, setMerchantQROpen] = useState<boolean>(false);
   const [discoverModalOpen, setDiscoverModalOpen] = useState<boolean>(false);
   const [showInstallModal, setShowInstallModal] = useState<boolean>(false);
+  const [showUpdateModal, setShowUpdateModal] = useState<boolean>(false);
+  const [showNotificationsModal, setShowNotificationsModal] = useState<boolean>(false);
+
+  // Listen for open update modal custom event & PWA installation
+  useEffect(() => {
+    const handleOpenUpdate = () => setShowUpdateModal(true);
+    const handleAppInstalled = () => {
+      markAppAsInstalled();
+    };
+
+    window.addEventListener('pointili:open-update-modal', handleOpenUpdate);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('pointili:open-update-modal', handleOpenUpdate);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
 
   // Sync to LocalStorage
   useEffect(() => {
@@ -429,6 +451,9 @@ export default function App() {
       <div className="w-full max-w-md min-h-screen bg-zinc-950 flex flex-col relative shadow-2xl shadow-black border-x border-zinc-900/60">
         {/* Main View Router */}
         <main className="flex-1 w-full overflow-y-auto">
+          {/* App Renewal & Update Alert Banner */}
+          <AppUpdateBanner onOpenDetails={() => setShowUpdateModal(true)} />
+
           {/* Subtle In-App Home Screen Prompt */}
           <PWAInstallBanner
             forceOpenModal={showInstallModal}
@@ -450,6 +475,8 @@ export default function App() {
               onOpenMerchantQR={() => setMerchantQROpen(true)}
               onOpenAdminLogin={() => setShowAdminLogin(true)}
               onOpenInstallModal={() => setShowInstallModal(true)}
+              onOpenNotifications={() => setShowNotificationsModal(true)}
+              onOpenUpdateModal={() => setShowUpdateModal(true)}
             />
           )}
 
@@ -474,6 +501,7 @@ export default function App() {
               onAddMorePlaces={() => setDiscoverModalOpen(true)}
               onOpenAdminLogin={() => setShowAdminLogin(true)}
               onOpenInstallModal={() => setShowInstallModal(true)}
+              onOpenUpdateModal={() => setShowUpdateModal(true)}
             />
           )}
         </main>
@@ -524,6 +552,20 @@ export default function App() {
           availablePlaces={DISCOVERABLE_RESTAURANTS}
           existingIds={restaurants.map((r) => r.id)}
           onAddPlace={handleAddPlace}
+        />
+
+        {/* App Renewal & Updates Details Modal */}
+        <AppUpdateModal
+          isOpen={showUpdateModal}
+          onClose={() => setShowUpdateModal(false)}
+          onOpenInstallModal={() => setShowInstallModal(true)}
+        />
+
+        {/* Notifications Center & History Drawer Modal */}
+        <NotificationsModal
+          isOpen={showNotificationsModal}
+          onClose={() => setShowNotificationsModal(false)}
+          onOpenUpdateDetails={() => setShowUpdateModal(true)}
         />
       </div>
     </div>

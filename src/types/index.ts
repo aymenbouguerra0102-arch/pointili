@@ -118,3 +118,31 @@ export interface MerchantSession {
   username: string;
   loginTime: string;
 }
+
+export interface AppUpdateInfo {
+  version: string;
+  releaseDate: string;
+  title: string;
+  titleAr: string;
+  titleFr: string;
+  description: string;
+  descriptionAr: string;
+  descriptionFr: string;
+  highlightsAr: string[];
+  highlightsFr: string[];
+  highlightsEn: string[];
+  isCritical?: boolean;
+}
+
+export interface AppNotification {
+  id: string;
+  type: 'app_update' | 'reward' | 'system' | 'broadcast';
+  title: string;
+  titleAr: string;
+  body: string;
+  bodyAr: string;
+  timestamp: string;
+  read: boolean;
+  version?: string;
+  senderName?: string;
+}
