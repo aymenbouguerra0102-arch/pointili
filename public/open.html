@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pointili - فتح أو تحميل</title>
+  <title>Pointili - برج بوعريريج</title>
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
   <style>
     body {
@@ -11,31 +11,35 @@
       color: #fff;
       font-family: Arial, sans-serif;
       margin: 0;
-      padding: 20px;
+      padding: 15px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
       min-height: 100vh;
       box-sizing: border-box;
     }
 
-    .container {
-      max-width: 380px;
+    /* شاشة الاختيار الأولية (فتح أو تحميل) */
+    #choiceScreen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
       width: 100%;
-      background: #1a1a1a;
-      border: 1px solid #333;
+      max-width: 400px;
+      margin-top: 50px;
+      background: #18181b;
+      border: 1px solid #27272a;
       border-radius: 20px;
-      padding: 25px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      padding: 30px;
       text-align: center;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
       box-sizing: border-box;
     }
 
-    h2 { color: #22c55e; font-size: 20px; margin-bottom: 10px; }
-    p { color: #aaa; font-size: 13px; line-height: 1.5; margin-bottom: 25px; }
+    #choiceScreen h2 { color: #22c55e; margin-bottom: 10px; font-size: 22px; }
+    #choiceScreen p { color: #a1a1aa; font-size: 13px; margin-bottom: 25px; line-height: 1.5; }
 
-    /* أزرار الاختيار بين الفتح والتحميل */
     .choice-btn {
       width: 100%;
       padding: 14px;
@@ -48,75 +52,121 @@
       transition: background 0.2s, transform 0.1s;
     }
     .choice-btn:active { transform: scale(0.98); }
-
-    .btn-open {
-      background: #22c55e;
-      color: #000;
-    }
+    .btn-open { background: #22c55e; color: #000; }
     .btn-open:hover { background: #16a34a; }
-
-    .btn-install {
-      background: #2563eb;
-      color: #fff;
-      display: block; /* يظهر للمستخدم ويدعم التثبيت المباشر */
-    }
+    .btn-install { background: #2563eb; color: #fff; display: block; }
     .btn-install:hover { background: #1d4ed8; }
 
-    /* شاشة التطبيق الرئيسية (مخفية لحين اختيار الفتح أو تسجيل الدخول) */
-    #appContent {
+    /* حاوية التطبيق الرئيسية (مخفية لحين الضغط على فتح) */
+    #mainAppContainer {
       display: none;
+      width: 100%;
+      max-width: 420px;
+      flex-direction: column;
+      align-items: center;
+      box-sizing: border-box;
     }
 
-    .google-auth-box {
-      margin-top: 15px;
+    /* تنسيقات واجهة التطبيق الأصلية */
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      margin-bottom: 20px;
+    }
+
+    .badge-btn {
+      background: #18181b;
+      border: 1px solid #27272a;
+      color: #22c55e;
+      padding: 8px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: bold;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: border-color 0.2s;
+    }
+    .badge-btn:hover { border-color: #22c55e; }
+
+    .main-card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 24px;
+      padding: 25px 20px;
+      text-align: center;
+      width: 100%;
+      box-sizing: border-box;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+      margin-bottom: 20px;
+    }
+
+    .main-card h2 { color: #22c55e; font-size: 20px; margin-bottom: 8px; }
+    .main-card p { color: #a1a1aa; font-size: 13px; line-height: 1.5; margin-bottom: 20px; }
+
+    /* صندوق تسجيل الدخول بجوجل */
+    .google-auth-wrapper {
       display: flex;
       justify-content: center;
+      margin: 15px 0;
       min-height: 44px;
     }
 
-    #userGreeting {
-      color: #22c55e;
-      font-weight: bold;
-      font-size: 16px;
-      margin-top: 15px;
-      line-height: 1.6;
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      width: 100%;
+      margin-bottom: 20px;
     }
 
-    .back-btn {
-      background: transparent;
-      border: 1px solid #444;
-      color: #aaa;
-      padding: 8px 16px;
-      border-radius: 15px;
-      font-size: 12px;
-      cursor: pointer;
-      margin-top: 15px;
+    .feature-box {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 16px;
+      padding: 15px 5px;
+      text-align: center;
+      font-size: 11px;
+      color: #fff;
     }
-    .back-btn:hover { color: #fff; border-color: #666; }
+    .feature-box span { display: block; color: #22c55e; font-weight: bold; font-size: 13px; margin-top: 5px; }
+
+    .footer-text {
+      color: #71717a;
+      font-size: 12px;
+      text-align: center;
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
 
-  <div class="container">
+  <!-- 1. شاشة الترحيب والاختيار (فتح أو تحميل) -->
+  <div id="choiceScreen">
+    <h2>Pointili</h2>
+    <p>اختر طريقة تشغيل التطبيق للبدء فوراً في جمع الأختام:</p>
+    <button class="choice-btn btn-open" onclick="startAppDirectly()">🌐 فتح التطبيق مباشرة</button>
+    <button id="installAppBtn" class="choice-btn btn-install" onclick="installPWA()">📥 تحميل وتثبيت على الهاتف</button>
+  </div>
+
+  <!-- 2. واجهة التطبيق الرئيسية (تظهر بعد النقر على فتح) -->
+  <div id="mainAppContainer">
     
-    <!-- واجهة الاختيار (فتح أو تحميل) -->
-    <div id="welcomeChoiceScreen">
-      <h2>Pointili - برج بوعريريج</h2>
-      <p>اختر كيف تريد استخدام تطبيق الولاء الخاص بك:</p>
-      
-      <!-- خيار الفتح المباشر -->
-      <button class="choice-btn btn-open" onclick="openDirectly()">🌐 فتح التطبيق مباشرة</button>
-      
-      <!-- خيار التثبيت/التحميل (يظهر تلقائياً لو المتصفح يدعمه) -->
-      <button id="installChoiceBtn" class="choice-btn btn-install" onclick="installApp()">📥 تحميل وتثبيت على الهاتف</button>
+    <!-- الشريط العلوي -->
+    <div class="top-bar">
+      <button class="badge-btn" onclick="window.location.href='/'">🛡️ بوابة الإدارة</button>
+      <button class="badge-btn" onclick="backToChoices()">↩ العودة للخيار</button>
     </div>
 
-    <!-- محتوى التطبيق الفعلي (يظهر بعد اختيار الفتح) -->
-    <div id="appContent">
+    <!-- البطاقة الرئيسية لتسجيل الدخول -->
+    <div class="main-card">
       <h2>تسجيل الدخول</h2>
-      <p>سجل بحسابك لتبدأ في جمع الأختام بكل أمان.</p>
+      <p>سجل بحسابك الحقيقي لتبدأ في جمع الأختام بكل أمان وثقة.</p>
 
-      <div class="google-auth-box" id="loginWrapper">
+      <!-- زر تسجيل الدخول الحقيقي بـ Google -->
+      <div class="google-auth-wrapper" id="googleLoginDiv">
         <div id="g_id_onload"
              data-client_id="1043668200753-n9veclikvkeelm5988ncj9c6jrc5ds5l.apps.googleusercontent.com"
              data-callback="handleCredentialResponse"
@@ -132,55 +182,65 @@
         </div>
       </div>
 
-      <div id="userGreeting"></div>
+      <div id="userWelcomeDisplay" style="display:none; color: #22c55e; font-weight: bold; font-size: 15px; margin-top: 15px; line-height: 1.6;"></div>
 
-      <button class="back-btn" onclick="backToChoice()">↩ العودة لخيارات الفتح والتحميل</button>
+      <div style="margin-top: 15px; font-size: 11px; color: #71717a; border-top: 1px solid #27272a; padding-top: 12px;">
+        🔒 خصوصية 100% • بريدك مخفي تماماً
+      </div>
     </div>
 
+    <!-- المزايا الثلاث السفلية -->
+    <div class="features-grid">
+      <div class="feature-box">مسح كود QR <span>في ثانية واحدة</span></div>
+      <div class="feature-box">6 دوائر <span>هدية مجانية</span></div>
+      <div class="feature-box">برج بوعريريج <span>مطاعم 34</span></div>
+    </div>
+
+    <div class="footer-text">Pointili • BBA © 2026</div>
   </div>
 
-  <!-- مكتبة Google Sign-In -->
+  <!-- مكتبة Google Sign-In الرسمية -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 
   <script>
     let deferredPrompt;
 
-    // التقاط إشارة إمكانية التثبيت من المتصفح
+    // التقاط إشارة التثبيت للمتصفحات الداعمة
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredPrompt = e;
-      const btn = document.getElementById('installChoiceBtn');
+      const btn = document.getElementById('installAppBtn');
       if (btn) btn.style.display = 'block';
     });
 
-    // زر "فتح التطبيق مباشرة"
-    function openDirectly() {
-      document.getElementById('welcomeChoiceScreen').style.display = 'none';
-      document.getElementById('appContent').style.display = 'block';
+    // دالة فتح التطبيق مباشرة
+    function startAppDirectly() {
+      document.getElementById('choiceScreen').style.display = 'none';
+      document.getElementById('mainAppContainer').style.display = 'flex';
     }
 
-    function backToChoice() {
-      document.getElementById('appContent').style.display = 'none';
-      document.getElementById('welcomeChoiceScreen').style.display = 'block';
+    // العودة لواجهة الخيارات
+    function backToChoices() {
+      document.getElementById('mainAppContainer').style.display = 'none';
+      document.getElementById('choiceScreen').style.display = 'flex';
     }
 
-    // زر "تحميل وتثبيت"
-    function installApp() {
+    // دالة التثبيت اليدوي
+    function installPWA() {
       if (deferredPrompt) {
         deferredPrompt.prompt();
         deferredPrompt.userChoice.then((choiceResult) => {
           if (choiceResult.outcome === 'accepted') {
-            console.log('تم قبول التثبيت');
+            console.log('تم التثبيت');
           }
           deferredPrompt = null;
         });
       } else {
-        alert("التثبيت التلقائي غير مدعوم في هذا المتصفح، يمكنك فتحه مباشرة أو إضافته للشاشة الرئيسية يدويًا من إعدادات المتصفح.");
-        openDirectly(); // الانتقال المباشر للتطبيق
+        startAppDirectly();
       }
     }
 
-    // معالجة تسجيل الدخول بـ Google
+    // استجابة تسجيل الدخول الحقيقي عبر Google
     function handleCredentialResponse(response) {
       const userInfo = parseJwt(response.credential);
       
@@ -189,12 +249,14 @@
         localStorage.setItem("user_name", userInfo.name);
       }
       
-      const wrapper = document.getElementById("loginWrapper");
-      if (wrapper) wrapper.style.display = "none";
-      
-      const greeting = document.getElementById("userGreeting");
-      if (greeting) {
-        greeting.innerHTML = `أهلاً بك، ${userInfo.name || 'مستخدم'} 👋<br><span style="font-size:11px; color:#aaa;">تم تسجيل الدخول بنجاح! جاري الانتقال للتطبيق...</span>`;
+      // إخفاء زر جوجل وإظهار رسالة الترحيب الشخصية بالاسم
+      const loginDiv = document.getElementById('googleLoginDiv');
+      if (loginDiv) loginDiv.style.display = 'none';
+
+      const welcomeDisplay = document.getElementById('userWelcomeDisplay');
+      if (welcomeDisplay) {
+        welcomeDisplay.style.display = 'block';
+        welcomeDisplay.innerHTML = `أهلاً بك يا ${userInfo.name || 'مستخدم'} 👋<br><span style="font-size: 12px; color: #a1a1aa;">تم تسجيل الدخول بنجاح بحسابك الحقيقي! جاري نقلك للتطبيق...</span>`;
       }
 
       setTimeout(() => {
