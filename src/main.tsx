@@ -5,6 +5,10 @@ import {LanguageProvider} from './i18n/LanguageContext.tsx';
 import './index.css';
 import { registerSW } from 'virtual:pwa-register';
 import { broadcastAppRenewalUpdate, CURRENT_APP_VERSION, playAppUpdateChime } from './services/appUpdateService';
+import { enforceHttpsProtocol } from './services/httpsSecurityService';
+
+// Enforce strict HTTPS usage exclusively and prevent uncertified HTTP connections
+enforceHttpsProtocol();
 
 // Automatic Service Worker update listener for everyone who downloaded/installed the app
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
