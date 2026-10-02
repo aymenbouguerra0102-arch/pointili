@@ -15,20 +15,6 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Pointili" />
-    <!-- Content Security Policy (CSP) - Strict Protection Against XSS & Rogue Scripts -->
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com https://accounts.google.com/gsi/client https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://images.unsplash.com https://accounts.google.com https://*.googleusercontent.com https://ui-avatars.com; connect-src 'self' https://accounts.google.com https://identitytoolkit.googleapis.com https://*.googleapis.com https://*.google.com https://*.run.app https://ui-avatars.com https://images.unsplash.com wss: ws:; media-src 'self' blob: mediastream:; worker-src 'self' blob:; frame-src 'self' https://accounts.google.com; object-src 'none'; base-uri 'self'; form-action 'self' https://accounts.google.com; upgrade-insecure-requests;"
-    />
-    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
-    <meta http-equiv="X-XSS-Protection" content="1; mode=block" />
-    <script>
-      (function() {
-        if (location.protocol === 'http:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1' && location.hostname !== '0.0.0.0') {
-          location.replace('https://' + location.host + location.pathname + location.search + location.hash);
-        }
-      })();
-    </script>
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />

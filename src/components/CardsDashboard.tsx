@@ -190,14 +190,6 @@ export const CardsDashboard: React.FC<CardsDashboardProps> = ({
         </div>
       </div>
 
-      {/* ترحيب بالمستخدم بعد تسجيل الدخول */}
-      <div
-        id="userGreeting"
-        className="text-center text-[#22c55e] font-extrabold text-[13px] sm:text-[14px] mb-2.5 py-1.5 px-3 rounded-xl bg-[#22c55e]/10 border border-[#22c55e]/25 flex items-center justify-center gap-1.5 shadow-sm animate-in fade-in"
-      >
-        <span>مرحباً بك، {user.name} ⭐</span>
-      </div>
-
       {/* Animated Interactive Carousel / Slider for Announcements, Venues & Features */}
       <PromoCarousel
         restaurants={restaurants}

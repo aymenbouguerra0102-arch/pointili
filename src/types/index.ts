@@ -105,9 +105,6 @@ export interface StampRequest {
   resolvedAt?: string;
   currentStampsBefore: number;
   newStampsAfter?: number;
-  // Device & Anti-Fraud fields
-  deviceId?: string;
-  devicePlatform?: string;
   // Appeal system fields
   appealNote?: string;
   appealedAt?: string;

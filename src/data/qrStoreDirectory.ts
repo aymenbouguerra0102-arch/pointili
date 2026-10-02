@@ -1,5 +1,3 @@
-import { validateAndEnforceSecureUrl } from '../services/httpsSecurityService';
-
 export interface RegisteredQRStore {
   key: string;
   name: string;
@@ -272,16 +270,7 @@ export function extractStoreIdFromQRPayload(scannedText: string): string | null 
   // 1. URI protocol: pointili://scan?store=... or https://...
   try {
     if (raw.startsWith('pointili://') || raw.startsWith('http://') || raw.startsWith('https://')) {
-      if (raw.startsWith('http://')) {
-        const check = validateAndEnforceSecureUrl(raw, 'qr_store_extractor');
-        if (!check.isAllowed) {
-          console.warn('[SECURITY] Blocked insecure unencrypted HTTP QR payload:', raw);
-          return null;
-        }
-      }
-      const normalizedUrl = raw
-        .replace(/^http:\/\//i, 'https://')
-        .replace('pointili://', 'https://pointili.app/');
+      const normalizedUrl = raw.replace('pointili://', 'https://pointili.app/');
       const urlObj = new URL(normalizedUrl);
       const storeParam =
         urlObj.searchParams.get('store') ||

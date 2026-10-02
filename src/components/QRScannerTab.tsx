@@ -37,22 +37,6 @@ import {
   identifyStoreFromQR,
   RegisteredQRStore,
 } from '../data/qrStoreDirectory';
-import {
-  checkScanCooldown,
-  recordDatabaseScan,
-  canUserScanStore,
-  recordStoreScanTimestamp,
-  ScanEligibilityResult,
-  SCAN_COOLDOWN_SECONDS,
-} from '../services/scanAntiFraudService';
-import {
-  validateAndEnforceSecureUrl,
-  isHttpsActive,
-} from '../services/httpsSecurityService';
-import {
-  detectXssAttack,
-  recordXssAttackAttempt,
-} from '../services/xssSecurityService';
 
 interface QRScannerTabProps {
   restaurants: Restaurant[];
@@ -190,38 +174,6 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
   const [appealNote, setAppealNote] = useState<string>('');
   const [appealSent, setAppealSent] = useState<boolean>(false);
 
-  // Anti-Fraud Rate Limiting (60-second cooldown per restaurant & device/account)
-  const [rateLimitResult, setRateLimitResult] = useState<ScanEligibilityResult | null>(null);
-  const [cooldownCountdown, setCooldownCountdown] = useState<number>(0);
-
-  // HTTPS Strict Security Protocol Enforcement
-  const [httpsBlockedError, setHttpsBlockedError] = useState<{
-    rawPayload: string;
-    reason: string;
-  } | null>(null);
-
-  // Content Security Policy & XSS Defense State
-  const [xssAttackBlocked, setXssAttackBlocked] = useState<{
-    payload: string;
-    pattern: string;
-    reason: string;
-  } | null>(null);
-
-  // Live countdown timer for rate limit cooldown
-  useEffect(() => {
-    if (cooldownCountdown <= 0) return;
-    const interval = setInterval(() => {
-      setCooldownCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [cooldownCountdown]);
-
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -248,49 +200,20 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
     setTorchOn(false);
   }, []);
 
-  // Requirement 2: Generates a Pending Stamp Request with 60s Anti-Fraud Cooldown
+  // Requirement 2: Generates a Pending Stamp Request (Anti-Fraud)
   const handleInitiateStampRequest = useCallback(
     (target: Restaurant) => {
       if (isHandlingScanRef.current) return;
       isHandlingScanRef.current = true;
 
-      // 1. Check Anti-Fraud Rate Limiting (60-second cooldown per restaurant & device/account)
-      const eligibility = checkScanCooldown(target.id, currentUser);
-      if (!eligibility.isAllowed) {
-        // Record rate-limited attempt in persistent database
-        recordDatabaseScan({
-          restaurantId: target.id,
-          restaurantName: target.nameAr || target.name,
-          user: currentUser,
-          status: 'rate_limited',
-          blockReason: eligibility.reason,
-        });
-
-        playErrorTone();
-        navigator.vibrate?.([200, 100, 200, 100, 200]);
-
-        setRateLimitResult(eligibility);
-        setCooldownCountdown(eligibility.secondsRemaining);
-        stopCamera();
-        return;
-      }
-
-      // 2. Scan allowed! Record scan in persistent database with Device ID & Gmail
-      recordDatabaseScan({
-        restaurantId: target.id,
-        restaurantName: target.nameAr || target.name,
-        user: currentUser,
-        status: 'accepted',
-      });
-
       playScanChime();
       navigator.vibrate?.([80, 50, 80]);
 
-      // Create secure pending request with privacy protection and device fingerprint
+      // Create secure pending request with privacy protection
       const displayEmail =
         currentUser?.hideEmailFromPublic && currentUser?.maskedEmail
           ? currentUser.maskedEmail
-          : currentUser?.email || eligibility.userEmail;
+          : currentUser?.email || 'customer@gmail.com';
 
       const req = createStampRequest({
         restaurant: target,
@@ -300,8 +223,6 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
         userAvatar:
           currentUser?.avatarUrl ||
           'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
-        deviceId: eligibility.deviceId,
-        devicePlatform: eligibility.devicePlatform,
       });
 
       setActiveRequest(req);
@@ -317,51 +238,8 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
     (scannedText: string) => {
       if (isHandlingScanRef.current || !scannedText) return;
 
-      let effectivePayload = scannedText.trim();
-
-      // Content Security Policy (CSP) & XSS Attack Defense:
-      // Prevent Cross-Site Scripting (XSS) injection or execution of rogue scripts
-      const xssCheck = detectXssAttack(effectivePayload);
-      if (xssCheck.isMalicious) {
-        recordXssAttackAttempt({
-          payload: effectivePayload,
-          source: 'qr_scanner',
-          detectedPattern: xssCheck.detectedPattern || 'Unknown Script Injection',
-        });
-        playErrorTone();
-        navigator.vibrate?.([400, 100, 400, 100, 400]);
-        stopCamera();
-        setXssAttackBlocked({
-          payload: effectivePayload,
-          pattern: xssCheck.detectedPattern || 'كود برمجي غير مصرح به',
-          reason: xssCheck.reason || 'تم رصد محاولة حقن كود خبيث (XSS).',
-        });
-        return;
-      }
-
-      // Enforce strict HTTPS: Block uncertified HTTP connections or upgrade recognized URLs
-      if (effectivePayload.toLowerCase().startsWith('http://')) {
-        const securityCheck = validateAndEnforceSecureUrl(effectivePayload, 'qr_scanner');
-        if (!securityCheck.isAllowed) {
-          playErrorTone();
-          navigator.vibrate?.([300, 100, 300]);
-          stopCamera();
-          setHttpsBlockedError({
-            rawPayload: effectivePayload,
-            reason:
-              securityCheck.errorMessage ||
-              'تم حظر هذا الرابط تلقائياً لأنه يستخدم بروتوكول HTTP غير المشفر وغير المعتمد. يفرض نظام Pointili بروتوكول HTTPS حصراً.',
-          });
-          return;
-        }
-
-        if (securityCheck.wasUpgraded) {
-          effectivePayload = securityCheck.secureUrl;
-        }
-      }
-
       // Directly identify which store this QR code belongs to
-      const identified = identifyStoreFromQR(effectivePayload, restaurants);
+      const identified = identifyStoreFromQR(scannedText, restaurants);
 
       if (identified) {
         // SUCCESS: Target store recognized instantly!
@@ -902,240 +780,6 @@ export const QRScannerTab: React.FC<QRScannerTabProps> = ({
             >
               <RefreshCw className="w-3.5 h-3.5 text-[#76FF03]" />
               <span>إعادة المحاولة ومسح كود طاولة الكاشير المعتمد</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================
-          ANTI-FRAUD 60-SECOND RATE LIMIT COOLDOWN MODAL
-      ======================================================== */}
-      {rateLimitResult && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in select-none font-['Plus_Jakarta_Sans']">
-          <div className="w-full max-w-sm bg-zinc-950 border-2 border-amber-500 rounded-3xl p-5 text-center shadow-2xl shadow-amber-500/20 relative overflow-hidden animate-in zoom-in-95">
-            {/* Pulsing Light Glow */}
-            <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-32 h-32 bg-amber-500/20 rounded-full blur-2xl pointer-events-none" />
-
-            <div className="w-16 h-16 rounded-2xl bg-amber-500/15 border-2 border-amber-500 text-amber-400 mx-auto mb-3 flex items-center justify-center shadow-xl shadow-amber-500/25 animate-pulse">
-              <ShieldAlert className="w-8 h-8 stroke-[2.5]" />
-            </div>
-
-            <h3 className="text-base sm:text-lg font-black text-white mb-1">
-              منع المسح المتتالي لنفس المطعم إلا بعد مرور ساعة ⏳
-            </h3>
-
-            <p className="text-[12px] text-amber-300 font-medium mb-3">
-              نظام حماية ولاء Pointili: مهلة ساعة كاملة (60 دقيقة) لكل مطعم بشكل منفصل
-            </p>
-
-            {/* Direct Warning Alert Message */}
-            <div className="my-2.5 p-3 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-200 text-xs font-semibold leading-relaxed text-right">
-              ⏳ عذراً، لقد قمت بمسح كود هذا المطعم مؤخراً. يرجى الانتظار لمدة{' '}
-              <span className="font-mono text-white font-black underline underline-offset-2">
-                {rateLimitResult.minutesRemaining || Math.max(1, Math.ceil(cooldownCountdown / 60))} دقيقة
-              </span>{' '}
-              أخرى لتكرار زيارته.
-            </div>
-
-            {/* Circular Countdown Badge */}
-            <div className="my-3 p-3.5 rounded-2xl bg-black/70 border border-amber-500/30 flex flex-col items-center justify-center">
-              <div className="text-[11px] text-zinc-400 font-bold mb-1">الوقت المتبقي بدقة:</div>
-              <div className="flex items-center gap-2">
-                {cooldownCountdown >= 60 ? (
-                  <div className="flex items-baseline gap-1.5 font-mono font-black text-amber-400">
-                    <span className="text-3xl">{Math.floor(cooldownCountdown / 60)}</span>
-                    <span className="text-xs text-zinc-400 font-sans font-bold">دقيقة</span>
-                    <span className="text-2xl text-amber-300/80">{cooldownCountdown % 60}</span>
-                    <span className="text-xs text-zinc-400 font-sans font-bold">ثانية</span>
-                  </div>
-                ) : (
-                  <div className="flex items-baseline gap-1.5 font-mono font-black text-amber-400">
-                    <span className="text-3xl">{cooldownCountdown}</span>
-                    <span className="text-xs text-zinc-400 font-sans font-bold">ثانية</span>
-                  </div>
-                )}
-              </div>
-              <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden mt-2">
-                <div
-                  className="bg-amber-400 h-full transition-all duration-1000"
-                  style={{ width: `${(cooldownCountdown / SCAN_COOLDOWN_SECONDS) * 100}%` }}
-                />
-              </div>
-            </div>
-
-            {/* Persistent Database Record Telemetry Details */}
-            <div className="p-3 rounded-2xl bg-zinc-900/90 border border-zinc-800 text-xs text-right space-y-1.5 mb-3.5">
-              <div className="flex items-center justify-between text-[11px] pb-1 border-b border-zinc-800">
-                <span className="text-zinc-400">المحل المستهدف:</span>
-                <span className="font-bold text-white truncate max-w-[150px]">
-                  {activeStore?.nameAr || activeStore?.name}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-[11px] pb-1 border-b border-zinc-800">
-                <span className="text-zinc-400">حساب Gmail المسجل:</span>
-                <span className="font-mono text-[10px] text-[#76FF03] font-bold truncate max-w-[160px]" dir="ltr">
-                  {rateLimitResult.userEmail}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-[11px] pb-1 border-b border-zinc-800">
-                <span className="text-zinc-400">معرف الجهاز (Device ID):</span>
-                <span className="font-mono text-[10px] text-zinc-300 truncate max-w-[160px]" dir="ltr">
-                  {rateLimitResult.deviceId}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-zinc-400">وقت المسح السابق:</span>
-                <span className="font-mono text-[10px] text-zinc-400">
-                  {rateLimitResult.lastScanTimeFormatted || 'منذ لحظات'}
-                </span>
-              </div>
-            </div>
-
-            {/* Explanatory security note */}
-            <p className="text-[10px] text-zinc-400 leading-relaxed mb-3.5">
-              لحماية نظام المكافآت ومنع التكرار غير المصرح به، يُسمح بمسح واحد كل ساعة (60 دقيقة) لكل مطعم بشكل منفصل. تم توثيق المحاولة وتحديث سجل الأمان.
-            </p>
-
-            <button
-              type="button"
-              onClick={() => {
-                setRateLimitResult(null);
-                isHandlingScanRef.current = false;
-                startCamera();
-              }}
-              className={`w-full py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer ${
-                cooldownCountdown === 0
-                  ? 'bg-[#76FF03] hover:bg-[#8aff24] text-black shadow-[#76FF03]/25 border border-[#76FF03]'
-                  : 'bg-zinc-850 hover:bg-zinc-800 text-zinc-200 border border-zinc-700'
-              }`}
-            >
-              {cooldownCountdown === 0 ? (
-                <>
-                  <RefreshCw className="w-4 h-4 stroke-[2.5]" />
-                  <span>المسح متاح مجدداً · إعادة المحاولة الآن</span>
-                </>
-              ) : (
-                <>
-                  <span>فهمت ذلك · إغلاق النافذة ({cooldownCountdown}s)</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================
-          HTTPS SECURITY PROTOCOL ENFORCEMENT MODAL
-      ======================================================== */}
-      {httpsBlockedError && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in">
-          <div className="w-full max-w-sm bg-zinc-950 border-2 border-red-500/80 rounded-3xl p-6 text-center shadow-2xl relative overflow-hidden animate-in zoom-in-95">
-            <div className="w-16 h-16 rounded-2xl bg-red-500/10 border-2 border-red-500 text-red-400 mx-auto mb-4 flex items-center justify-center shadow-lg shadow-red-500/20">
-              <ShieldAlert className="w-8 h-8 stroke-[2.5]" />
-            </div>
-
-            <span className="inline-block px-3 py-1 rounded-full text-[11px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 mb-2">
-              🔒 حظر أمني مشدد · بروتوكول غير معتمد
-            </span>
-
-            <h3 className="text-base font-extrabold text-white mb-2 leading-relaxed">
-              تم حظر الاتصال غير المعتمد (HTTP غير مشفر)
-            </h3>
-
-            <p className="text-xs text-zinc-300 leading-relaxed mb-4">
-              يفرض تطبيق <strong className="text-[#76FF03]">Pointili</strong> بروتوكول الأمان المشفر (<strong className="text-white">HTTPS</strong>) حصراً لحماية بيانات بطاقتك وتأمين أختامك من التجسس أو التلاعب. لا يُسمح بأي اتصال HTTP غير مشفر.
-            </p>
-
-            {/* Blocked URL Details */}
-            <div className="bg-zinc-900 rounded-xl p-3 border border-zinc-800 text-right space-y-1.5 mb-4 text-[11px]">
-              <div className="flex justify-between items-center text-zinc-400 pb-1 border-b border-zinc-800/80">
-                <span>البروتوكول المطلوب:</span>
-                <span className="font-bold text-emerald-400 flex items-center gap-1">
-                  <span>HTTPS (TLS/SSL 256-bit)</span>
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-zinc-400 pb-1 border-b border-zinc-800/80">
-                <span>حالة الرابط الممسوح:</span>
-                <span className="font-bold text-red-400">HTTP غير مشفر (مرفوض)</span>
-              </div>
-              <div className="text-zinc-400 pt-1">
-                <span className="block text-[10px] text-zinc-500 mb-0.5">الرابط المرفوض:</span>
-                <span className="font-mono text-zinc-300 text-[10px] break-all bg-black/40 px-1.5 py-0.5 rounded block">
-                  {httpsBlockedError.rawPayload}
-                </span>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setHttpsBlockedError(null);
-                isHandlingScanRef.current = false;
-                startCamera();
-              }}
-              className="w-full py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 bg-[#76FF03] hover:bg-[#8aff24] text-black shadow-lg shadow-[#76FF03]/25 transition-all cursor-pointer"
-            >
-              <RefreshCw className="w-4 h-4 stroke-[2.5]" />
-              <span>العودة للمسح الآمن (HTTPS)</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================
-          XSS ATTACK & CSP SCRIPT INJECTION DEFENSE MODAL
-      ======================================================== */}
-      {xssAttackBlocked && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in">
-          <div className="w-full max-w-sm bg-zinc-950 border-2 border-amber-500/80 rounded-3xl p-6 text-center shadow-2xl relative overflow-hidden animate-in zoom-in-95">
-            <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border-2 border-amber-500 text-amber-400 mx-auto mb-4 flex items-center justify-center shadow-lg shadow-amber-500/20 animate-pulse">
-              <ShieldAlert className="w-8 h-8 stroke-[2.5]" />
-            </div>
-
-            <span className="inline-block px-3 py-1 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 mb-2">
-              🛡️ جدار حماية المحتوى (CSP) · حظر XSS
-            </span>
-
-            <h3 className="text-base font-extrabold text-white mb-2 leading-relaxed">
-              تم صد محاولة حقن كود خبيث (XSS Blocked)
-            </h3>
-
-            <p className="text-xs text-zinc-300 leading-relaxed mb-4">
-              تم رصد وحظر كود برمجي غريب داخل الـ QR الممسوح بنجاح. تمنع سياسة أمان المحتوى الصارمة في <strong className="text-[#76FF03]">Pointili</strong> تشغيل أي سكريبتات أو أكواد غير مصرح بها.
-            </p>
-
-            {/* Blocked Script Details */}
-            <div className="bg-zinc-900 rounded-xl p-3 border border-zinc-800 text-right space-y-1.5 mb-4 text-[11px]">
-              <div className="flex justify-between items-center text-zinc-400 pb-1 border-b border-zinc-800/80">
-                <span>نمط الهجوم المكتشف:</span>
-                <span className="font-bold text-amber-400 font-mono text-[10px]">
-                  {xssAttackBlocked.pattern}
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-zinc-400 pb-1 border-b border-zinc-800/80">
-                <span>حالة الحماية:</span>
-                <span className="font-bold text-emerald-400">محجور وممنوع من التنفيذ</span>
-              </div>
-              <div className="text-zinc-400 pt-1">
-                <span className="block text-[10px] text-zinc-500 mb-0.5">عينة المحتوى المشبوه:</span>
-                <span className="font-mono text-zinc-300 text-[10px] break-all bg-black/40 px-1.5 py-0.5 rounded block">
-                  {xssAttackBlocked.payload}
-                </span>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setXssAttackBlocked(null);
-                isHandlingScanRef.current = false;
-                startCamera();
-              }}
-              className="w-full py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 bg-[#76FF03] hover:bg-[#8aff24] text-black shadow-lg shadow-[#76FF03]/25 transition-all cursor-pointer"
-            >
-              <RefreshCw className="w-4 h-4 stroke-[2.5]" />
-              <span>متابعة الاستخدام الآمن</span>
             </button>
           </div>
         </div>

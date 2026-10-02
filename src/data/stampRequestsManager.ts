@@ -1,5 +1,4 @@
 import { StampRequest, Restaurant } from '../types';
-import { getOrCreateDeviceId, getDevicePlatformInfo } from '../services/scanAntiFraudService';
 
 export const STORAGE_KEY_STAMP_REQUESTS = 'pointili_stamp_requests_v1';
 
@@ -80,13 +79,8 @@ export function createStampRequest(data: {
   userEmail: string;
   userName: string;
   userAvatar: string;
-  deviceId?: string;
-  devicePlatform?: string;
 }): StampRequest {
   const current = getStampRequests();
-
-  const deviceId = data.deviceId || getOrCreateDeviceId();
-  const devicePlatform = data.devicePlatform || getDevicePlatformInfo();
 
   const newRequest: StampRequest = {
     id: `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
@@ -101,8 +95,6 @@ export function createStampRequest(data: {
     createdAt: Date.now(),
     status: 'pending',
     currentStampsBefore: data.restaurant.stampsCount || 0,
-    deviceId,
-    devicePlatform,
   };
 
   const updated = [newRequest, ...current];
